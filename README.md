@@ -130,18 +130,18 @@ Open http://localhost:12221
 
 NmapViz reads the standard nmap XML output format (`-oX`). Here are the most useful commands:
 
-### Basic — just find open ports
+### Basic: Just find open ports
 ```bash
 nmap -oX output.xml 192.168.1.0/24
 ```
 
-### Recommended — with version detection
+### Recommended: With version detection
 ```bash
 nmap -sV -oX output.xml 192.168.1.0/24
 ```
 Detects service versions, enabling vulnerability matching.
 
-### Full — OS detection, scripts, versions
+### Full: OS detection, scripts, versions
 ```bash
 nmap -A -oX output.xml 192.168.1.0/24
 ```
@@ -161,7 +161,7 @@ nmap -sV --top-ports 150 -T4 -n --open -oX fast.xml 10.0.0.0/16
 # Merge multiple subnet scans in NmapViz:
 nmap -sV -oX scan_192.xml 192.168.1.0/24
 nmap -sV -oX scan_10.xml  10.0.0.0/24
-# → drop both files into NmapViz at once
+# Drop both files into NmapViz at once
 ```
 
 ---
@@ -192,27 +192,6 @@ SSH (22), RDP (3389), SMB (445/139), WinRM (5985/5986), VNC (5900), all database
 
 ---
 
-## 📁 Project Structure
-
-```
-nmap-visualizer/
-├── app.py                  # Flask backend — parsing, history, reports
-├── templates/
-│   └── index.html          # Full frontend (single file)
-├── history/                # Saved scan results (auto-created)
-├── docs/
-│   ├── logo.svg
-│   └── screenshots/        # Add your screenshots here
-├── requirements.txt
-├── Dockerfile
-├── docker-compose.yml
-├── .dockerignore
-├── .gitignore
-└── README.md
-```
-
----
-
 ## 🤝 Contributing
 
 Pull requests are welcome. For major changes, open an issue first.
@@ -231,12 +210,6 @@ NmapViz is intended for **authorised security assessments only**. Always obtain 
 
 ---
 
-## 📄 Licence
+## 📄 License
 
-MIT — see [LICENSE](LICENSE) for details.
-
----
-
-<div align="center">
-Made with ❤️ for security professionals and network engineers
-</div>
+Project under MIT [license](LICENSE) for details.

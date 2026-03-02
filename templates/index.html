@@ -3,947 +3,995 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>NmapViz — Network Scan Visualizer</title>
+<title>NmapViz</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='18' fill='%230d1117'/%3E%3Ccircle cx='50' cy='50' r='38' fill='none' stroke='%234d9de0' stroke-width='2.5' opacity='.4'/%3E%3Ccircle cx='50' cy='50' r='22' fill='none' stroke='%234d9de0' stroke-width='2' opacity='.6'/%3E%3Cline x1='50' y1='50' x2='76' y2='26' stroke='%237c3aed' stroke-width='3'/%3E%3Cline x1='50' y1='50' x2='75' y2='73' stroke='%23f85149' stroke-width='3'/%3E%3Cline x1='50' y1='50' x2='82' y2='51' stroke='%233fb950' stroke-width='2.5'/%3E%3Ccircle cx='76' cy='26' r='5.5' fill='%237c3aed'/%3E%3Ccircle cx='75' cy='73' r='5' fill='%23f85149'/%3E%3Ccircle cx='82' cy='51' r='4.5' fill='%233fb950'/%3E%3Ccircle cx='50' cy='50' r='7' fill='%231f3a52' stroke='%234d9de0' stroke-width='2'/%3E%3Ccircle cx='50' cy='50' r='3' fill='%234d9de0'/%3E%3C/svg%3E">
 <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
 <style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Orbitron:wght@700&display=swap');
 :root {
-  --bg:#0d1117;--surface:#161b22;--surface2:#21262d;--border:#30363d;
-  --text:#e6edf3;--muted:#8b949e;--accent:#58a6ff;
-  --green:#3fb950;--yellow:#d29922;--red:#f85149;
-  --orange:#d98634;--purple:#bc8cff;--cyan:#39d353;
+  --bg:#0d1117; --surface:#161b22; --surface2:#1c2330; --surface3:#212b3a;
+  --border:#21303d; --border2:#2a3f52;
+  --text:#cdd9e5; --text2:#adbac7; --muted:#768a9a; --dim:#3d5060;
+  --accent:#4d9de0; --accent2:#3b8cc9;
+  /* Severity: CRITICAL=purple, HIGH=red, MEDIUM=orange, LOW=green, INFO=blue */
+  --sc: #7c3aed; --sh: #f85149; --sm: #e07a30; --sl: #3fb950; --si: #4d9de0;
+  --green:#3fb950; --red:#f85149; --orange:#e07a30; --yellow:#d29922; --purple:#7c3aed; --cyan:#39c5cf; --teal:#2bbc8a;
+  --font-body:'Inter',system-ui,sans-serif;
+  --font-mono:'JetBrains Mono','Courier New',monospace;
+  --font-num:'Orbitron',monospace;
+  --sidebar-w:300px;
 }
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+body{background:var(--bg);color:var(--text);font-family:var(--font-body);font-size:14px;line-height:1.6;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+#matrix-canvas{position:fixed;inset:0;z-index:0;opacity:.04;pointer-events:none}
 
-/* ── TOPBAR ───────────────────────────────────────────────────────────── */
-.topbar{display:flex;align-items:center;gap:12px;padding:0 16px;background:var(--surface);border-bottom:1px solid var(--border);height:52px;flex-shrink:0;z-index:10}
-.logo{display:flex;align-items:center;gap:10px;text-decoration:none;flex-shrink:0}
-.logo-text{font-size:17px;font-weight:800;color:var(--accent);letter-spacing:-0.3px}
-.logo-text span{color:var(--muted);font-weight:400}
-.topbar-sep{width:1px;height:24px;background:var(--border);flex-shrink:0}
+/* TOPBAR */
+.topbar{display:flex;align-items:center;gap:14px;padding:0 18px;background:var(--surface);border-bottom:1px solid var(--border);height:52px;flex-shrink:0;z-index:10;box-shadow:0 1px 12px rgba(0,0,0,.4)}
+.logo{display:flex;align-items:center;gap:10px;flex-shrink:0}
+.logo-wordmark{font-size:17px;font-weight:700;color:var(--accent);letter-spacing:-.3px}
+.logo-wordmark span{color:var(--muted);font-weight:400}
+.topbar-sep{width:1px;height:24px;background:var(--border2);flex-shrink:0}
 .scan-badges{display:flex;gap:6px;flex-wrap:wrap}
-.badge{font-size:11px;padding:2px 8px;border-radius:20px;font-weight:600;white-space:nowrap}
-.bv{background:rgba(88,166,255,.15);color:var(--accent)}
-.bb{background:rgba(139,148,158,.15);color:var(--muted)}
-.bs{background:rgba(63,185,80,.15);color:var(--green)}
-.bm{background:rgba(188,140,255,.15);color:var(--purple)}
+.badge{font-size:11px;padding:3px 9px;border-radius:20px;font-weight:600;white-space:nowrap;border:1px solid}
+.bv{border-color:var(--accent);color:var(--accent);background:rgba(77,157,224,.1)}
+.bb{border-color:var(--border2);color:var(--muted)}
+.bs{border-color:var(--green);color:var(--green);background:rgba(63,185,80,.08)}
 .topbar-right{margin-left:auto;display:flex;align-items:center;gap:8px}
-.btn{border:none;padding:7px 14px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;transition:opacity .2s;display:flex;align-items:center;gap:6px;white-space:nowrap}
-.btn-primary{background:var(--accent);color:#000}
-.btn-ghost{background:transparent;color:var(--muted);border:1px solid var(--border)}
-.btn-ghost:hover{background:var(--surface2);color:var(--text)}
-.btn:hover{opacity:.85}
-.btn-icon{background:transparent;border:1px solid var(--border);color:var(--muted);padding:6px 10px;border-radius:6px;cursor:pointer;font-size:13px;transition:all .2s}
-.btn-icon:hover{background:var(--surface2);color:var(--text)}
+.btn{border:1px solid;padding:6px 14px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font-body);transition:all .15s;display:inline-flex;align-items:center;gap:6px}
+.btn-primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn-primary:hover{background:var(--accent2);border-color:var(--accent2)}
+.btn-ghost{background:transparent;border-color:var(--border2);color:var(--muted)}
+.btn-ghost:hover{border-color:var(--accent);color:var(--accent);background:rgba(77,157,224,.06)}
+.btn-icon{background:transparent;border:1px solid var(--border2);color:var(--muted);padding:6px 11px;border-radius:6px;cursor:pointer;font-size:13px;font-family:var(--font-body);font-weight:500;transition:all .15s}
+.btn-icon:hover{border-color:var(--accent);color:var(--accent)}
 
-/* ── STATS BAR ────────────────────────────────────────────────────────── */
-.stats-bar{display:flex;gap:0;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0;overflow-x:auto}
-.stat{display:flex;align-items:center;gap:8px;padding:7px 16px;border-right:1px solid var(--border);white-space:nowrap;font-size:12px}
-.stat .val{font-size:16px;font-weight:700}
-.stat .lbl{color:var(--muted)}
-.stat-red .val{color:var(--red)}
-.stat-orange .val{color:var(--orange)}
-.stat-purple .val{color:var(--purple)}
+/* STATS BAR */
+.stats-bar{display:flex;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0;overflow-x:auto}
+.stat{display:flex;flex-direction:column;justify-content:center;padding:6px 20px;border-right:1px solid var(--border);white-space:nowrap;min-width:90px;cursor:pointer;transition:background .12s;position:relative;user-select:none}
+.stat:hover{background:rgba(255,255,255,.03)}
+.stat .val{font-size:22px;font-weight:700;font-family:var(--font-num);line-height:1.2}
+.stat .lbl{font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-top:1px}
+.stat-blue .val{color:var(--accent)}
 .stat-green .val{color:var(--green)}
-.stat-args{margin-left:auto;color:var(--muted);font-style:italic;font-size:11px;padding:7px 16px;max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.stat-crit .val{color:var(--sc)}
+.stat-high .val{color:var(--sh)}
+.stat-med .val{color:var(--sm)}
+.stat-purple .val{color:var(--purple)}
+.stat::after{content:'↗';position:absolute;top:5px;right:7px;font-size:9px;color:var(--dim);opacity:0;transition:opacity .12s}
+.stat:hover::after{opacity:1}
+.stat-args{margin-left:auto;color:var(--dim);font-style:italic;font-size:11px;padding:6px 16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:400px;font-family:var(--font-mono);display:flex;align-items:center}
 
-/* ── UPLOAD SCREEN ────────────────────────────────────────────────────── */
-#upload-zone{flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:20px;padding:40px}
-.drop-area{border:2px dashed var(--border);border-radius:16px;padding:52px 70px;text-align:center;cursor:pointer;transition:all .25s;max-width:560px;width:100%}
-.drop-area:hover,.drop-area.drag{border-color:var(--accent);background:rgba(88,166,255,.05)}
-.drop-area.drag{transform:scale(1.01)}
-.drop-logo{margin-bottom:20px}
-.drop-area h2{font-size:21px;margin-bottom:8px;font-weight:700}
-.drop-area p{color:var(--muted);font-size:13px;line-height:1.6}
-.drop-hint{margin-top:16px;background:var(--surface2);border-radius:8px;padding:12px 16px;text-align:left;font-size:12px;color:var(--muted)}
-.drop-hint code{color:var(--accent);background:rgba(88,166,255,.1);padding:1px 5px;border-radius:3px;font-size:11px}
-.drop-hint p{margin-top:4px}
-.multi-badge{display:inline-flex;align-items:center;gap:5px;background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.3);color:var(--green);font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;margin-top:12px}
+/* UPLOAD SCREEN */
+#upload-zone{flex:1;display:none;flex-direction:column;overflow:hidden;z-index:1}
+#upload-zone.active{display:flex}
+.upload-topbar{display:flex;align-items:center;gap:14px;padding:0 18px;background:var(--surface);border-bottom:1px solid var(--border);height:52px;flex-shrink:0;box-shadow:0 1px 12px rgba(0,0,0,.4)}
+.upload-content{flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;padding:40px;position:relative}
+.drop-area{border:1px solid var(--border2);border-radius:12px;padding:48px 64px;text-align:center;cursor:pointer;transition:all .2s;max-width:580px;width:100%;background:var(--surface);box-shadow:0 4px 32px rgba(0,0,0,.4);position:relative}
+.drop-area::before,.drop-area::after{content:'';position:absolute;width:16px;height:16px;border-color:var(--accent);border-style:solid}
+.drop-area::before{top:-1px;left:-1px;border-width:2px 0 0 2px;border-radius:12px 0 0 0}
+.drop-area::after{bottom:-1px;right:-1px;border-width:0 2px 2px 0;border-radius:0 0 12px 0}
+.drop-area:hover,.drop-area.drag{border-color:var(--accent);background:var(--surface2);box-shadow:0 4px 40px rgba(77,157,224,.12)}
+.drop-area h2{font-size:20px;font-weight:700;color:var(--text);margin-bottom:8px;letter-spacing:-.3px}
+.drop-area .sub{color:var(--muted);font-size:14px}
+.multi-badge{display:inline-flex;align-items:center;gap:6px;border:1px solid rgba(63,185,80,.35);color:var(--green);font-size:12px;font-weight:600;padding:4px 12px;margin-top:14px;border-radius:20px;background:rgba(63,185,80,.07)}
+.drop-hint{margin-top:18px;background:rgba(0,0,0,.25);border:1px solid var(--border);border-radius:6px;padding:14px 18px;text-align:left;font-size:13px;color:var(--muted);border-left:3px solid var(--accent)}
+.drop-hint p{margin-top:5px;line-height:1.7}
+.drop-hint code{color:var(--accent);font-size:12px;font-family:var(--font-mono);background:rgba(77,157,224,.08);padding:1px 5px;border-radius:3px}
 #file-input{display:none}
 
-/* ── MAIN APP ─────────────────────────────────────────────────────────── */
-#app{flex:1;display:none;flex-direction:column;overflow:hidden}
+/* History preview on upload screen */
+.upload-history-bar{width:100%;max-width:580px}
+.upload-history-bar details{background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.upload-history-bar summary{padding:10px 16px;cursor:pointer;color:var(--muted);font-size:13px;font-weight:600;list-style:none;display:flex;align-items:center;gap:8px;user-select:none}
+.upload-history-bar summary:hover{color:var(--text)}
+.upload-history-bar summary::after{content:'▼';margin-left:auto;font-size:10px;transition:transform .2s}
+.upload-history-bar details[open] summary::after{transform:rotate(180deg)}
+.upload-hist-list{padding:8px}
+.upload-hist-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;cursor:pointer;transition:background .12s;font-size:13px}
+.upload-hist-item:hover{background:rgba(77,157,224,.08)}
+.uhi-ts{color:var(--muted);font-size:11px;white-space:nowrap}
+.uhi-info{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text2)}
+.uhi-badges{display:flex;gap:4px;flex-shrink:0}
+.uhi-badge{font-size:10px;padding:1px 6px;border-radius:10px;font-weight:600;border:1px solid}
+
+/* MAIN APP */
+#app{flex:1;display:none;flex-direction:column;overflow:hidden;z-index:1}
+#app.active{display:flex}
 .main-layout{flex:1;display:flex;overflow:hidden;position:relative}
 
-/* ── SIDEBAR ──────────────────────────────────────────────────────────── */
-.sidebar{width:300px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;flex-shrink:0;transition:width .25s}
-.sidebar.collapsed{width:0;border-right:none}
+/* SIDEBAR */
+.sidebar{width:var(--sidebar-w);min-width:200px;max-width:600px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;flex-shrink:0;position:relative}
+.sidebar-resize{width:4px;background:transparent;cursor:col-resize;position:absolute;top:0;right:-2px;bottom:0;z-index:5;transition:background .15s}
+.sidebar-resize:hover,.sidebar-resize.dragging{background:var(--accent)}
 .sidebar-tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0}
-.tab-btn{flex:1;padding:10px 4px;font-size:11px;font-weight:700;cursor:pointer;background:none;border:none;color:var(--muted);border-bottom:2px solid transparent;transition:all .2s;text-transform:uppercase;letter-spacing:.5px}
+.tab-btn{flex:1;padding:10px 6px;font-size:12px;font-weight:600;cursor:pointer;background:none;border:none;color:var(--muted);border-bottom:2px solid transparent;transition:all .15s;font-family:var(--font-body)}
 .tab-btn.active{color:var(--accent);border-bottom-color:var(--accent)}
 .tab-content{display:none;flex:1;overflow-y:auto}
 .tab-content.active{display:block}
 
-/* ── HOST LIST ────────────────────────────────────────────────────────── */
-.host-item{padding:10px 12px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s}
-.host-item:hover,.host-item.selected{background:rgba(88,166,255,.08)}
-.host-ip{font-size:13px;font-weight:700;color:var(--accent);font-family:monospace}
-.host-meta{font-size:11px;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.host-badges{display:flex;gap:3px;margin-top:6px;flex-wrap:wrap}
-.pill{font-size:10px;padding:2px 6px;border-radius:4px;font-weight:600}
-.pill-c{background:rgba(248,81,73,.2);color:var(--red)}
-.pill-i{background:rgba(217,134,52,.2);color:var(--orange)}
-.pill-n{background:rgba(63,185,80,.15);color:var(--green)}
-.pill-v{background:rgba(188,140,255,.2);color:var(--purple)}
+/* HOST LIST */
+.host-item{padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s}
+.host-item:hover{background:rgba(77,157,224,.05)}
+.host-item.selected{background:rgba(77,157,224,.08);border-left:3px solid var(--accent)}
+.host-ip{font-size:14px;font-weight:700;color:var(--accent);font-family:var(--font-mono);letter-spacing:.3px}
+.host-meta{font-size:12px;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.host-badges{display:flex;gap:4px;margin-top:7px;flex-wrap:wrap}
+.pill{font-size:11px;padding:2px 8px;border-radius:20px;font-weight:600;border:1px solid}
+.pill-c{border-color:rgba(124,58,237,.4);color:var(--sc);background:rgba(124,58,237,.08)}
+.pill-i{border-color:rgba(248,81,73,.4);color:var(--sh);background:rgba(248,81,73,.08)}
+.pill-n{border-color:rgba(63,185,80,.35);color:var(--green);background:rgba(63,185,80,.07)}
+.pill-v{border-color:rgba(224,122,48,.4);color:var(--sm);background:rgba(224,122,48,.08)}
 
-/* ── PORT DETAIL ──────────────────────────────────────────────────────── */
+/* PORT DETAIL */
 #detail-panel{padding:12px}
-#detail-panel h3{font-size:13px;font-weight:700;margin-bottom:10px;color:var(--text);font-family:monospace}
-.port-row{padding:8px 10px;border-radius:6px;margin-bottom:5px;background:#0d1117;border:1px solid var(--border);font-size:12px}
-.port-row.critical{border-color:var(--red);background:rgba(248,81,73,.04)}
-.port-row.interesting{border-color:var(--orange);background:rgba(217,134,52,.04)}
+#detail-panel h3{font-size:13px;font-weight:700;margin-bottom:10px;color:var(--text);font-family:var(--font-mono)}
+.port-row{padding:9px 11px;margin-bottom:6px;border-radius:6px;background:var(--bg);border:1px solid var(--border);border-left:3px solid var(--border2);font-size:13px}
+.port-row.critical{border-left-color:var(--sc);border-color:rgba(124,58,237,.25);background:rgba(124,58,237,.04)}
+.port-row.interesting{border-left-color:var(--sh);border-color:rgba(248,81,73,.2);background:rgba(248,81,73,.04)}
 .port-header{display:flex;align-items:center;gap:8px}
-.port-num{font-weight:700;color:var(--accent);min-width:70px;font-family:monospace}
-.port-ver{color:var(--muted);margin-top:3px}
-.port-warn{color:var(--orange);margin-top:4px}
-.port-crit{color:var(--red);margin-top:4px}
-.script-block{margin-top:6px;background:var(--surface);border-radius:4px;padding:5px 8px;border-left:2px solid var(--purple)}
-.script-id{color:var(--purple);font-weight:600;margin-bottom:2px}
-.script-output{color:var(--muted);white-space:pre-wrap;word-break:break-all;max-height:80px;overflow-y:auto}
-.scan-notice{background:rgba(210,153,34,.1);border:1px solid rgba(210,153,34,.3);border-radius:6px;padding:8px 10px;margin-bottom:10px;color:#d29922}
+.port-num{font-weight:700;color:var(--accent);min-width:75px;font-family:var(--font-mono)}
+.port-name{color:var(--text);font-weight:500}
+.port-ver{color:var(--muted);margin-top:4px;font-size:12px;font-family:var(--font-mono)}
+.port-warn{color:var(--sh);margin-top:4px;font-size:12px}
+.port-crit{color:var(--sc);margin-top:4px;font-size:12px}
+.followup-cmd{margin-top:7px;background:rgba(0,0,0,.3);border:1px solid var(--border);border-left:3px solid var(--cyan);padding:7px 10px;border-radius:4px;font-size:12px}
+.followup-label{color:var(--cyan);font-weight:600;margin-bottom:3px;font-size:11px;letter-spacing:.3px}
+.followup-code{color:var(--teal);word-break:break-all;cursor:pointer;font-family:var(--font-mono);font-size:12px}
+.followup-code:hover{color:var(--accent);text-decoration:underline}
+.script-block{margin-top:6px;background:rgba(0,0,0,.25);border-radius:4px;padding:6px 9px;border-left:3px solid var(--purple)}
+.script-id{color:var(--purple);font-weight:600;margin-bottom:3px;font-size:12px;font-family:var(--font-mono)}
+.script-output{color:var(--muted);white-space:pre-wrap;word-break:break-all;max-height:90px;overflow-y:auto;font-size:11px;font-family:var(--font-mono)}
+.scan-notice{border:1px solid rgba(210,153,34,.3);border-left:3px solid var(--yellow);background:rgba(210,153,34,.06);padding:9px 11px;margin-bottom:10px;color:var(--yellow);font-size:13px;border-radius:4px}
 
-/* ── VULN PANEL ───────────────────────────────────────────────────────── */
+/* VULN PANEL */
 #vuln-panel{padding:12px}
-.vuln-card{border-radius:8px;padding:11px;margin-bottom:8px;border:1px solid}
-.vuln-CRITICAL{border-color:rgba(248,81,73,.4);background:rgba(248,81,73,.06)}
-.vuln-HIGH{border-color:rgba(217,134,52,.4);background:rgba(217,134,52,.06)}
-.vuln-MEDIUM{border-color:rgba(210,153,34,.4);background:rgba(210,153,34,.06)}
-.vuln-LOW{border-color:rgba(88,166,255,.4);background:rgba(88,166,255,.06)}
-.vuln-header{display:flex;align-items:center;gap:7px;margin-bottom:5px}
-.sev-badge{font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px}
-.sev-CRITICAL{background:rgba(248,81,73,.3);color:#ff8080}
-.sev-HIGH{background:rgba(217,134,52,.3);color:var(--orange)}
-.sev-MEDIUM{background:rgba(210,153,34,.3);color:var(--yellow)}
-.sev-LOW{background:rgba(88,166,255,.3);color:var(--accent)}
-.vuln-title{font-size:12px;font-weight:700}
-.vuln-desc{font-size:11px;color:var(--muted)}
-.vuln-meta{font-size:11px;margin-top:4px;display:flex;gap:12px}
+.vuln-card{border:1px solid;padding:11px 13px;margin-bottom:8px;border-radius:6px;border-left:3px solid}
+.vuln-CRITICAL{border-color:rgba(124,58,237,.3);border-left-color:var(--sc);background:rgba(124,58,237,.05)}
+.vuln-HIGH{border-color:rgba(248,81,73,.3);border-left-color:var(--sh);background:rgba(248,81,73,.05)}
+.vuln-MEDIUM{border-color:rgba(224,122,48,.3);border-left-color:var(--sm);background:rgba(224,122,48,.05)}
+.vuln-LOW{border-color:rgba(63,185,80,.25);border-left-color:var(--sl);background:rgba(63,185,80,.04)}
+.vuln-INFO{border-color:rgba(77,157,224,.25);border-left-color:var(--si);background:rgba(77,157,224,.04)}
+.vuln-header{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+.sev-badge{font-size:10px;font-weight:700;padding:2px 8px;border:1px solid;border-radius:20px;white-space:nowrap;font-family:var(--font-mono)}
+.sev-CRITICAL{border-color:var(--sc);color:var(--sc);background:rgba(124,58,237,.12)}
+.sev-HIGH{border-color:var(--sh);color:var(--sh);background:rgba(248,81,73,.12)}
+.sev-MEDIUM{border-color:var(--sm);color:var(--sm);background:rgba(224,122,48,.12)}
+.sev-LOW{border-color:var(--sl);color:var(--sl);background:rgba(63,185,80,.1)}
+.sev-INFO{border-color:var(--si);color:var(--si);background:rgba(77,157,224,.1)}
+.vuln-title{font-size:13px;font-weight:600;color:var(--text)}
+.vuln-desc{font-size:13px;color:var(--text2);line-height:1.6;margin-top:2px}
+.vuln-meta{font-size:12px;margin-top:6px;display:flex;gap:14px;flex-wrap:wrap}
 .vuln-cve{color:var(--purple)}
 .vuln-port{color:var(--accent)}
-.no-vulns{color:var(--green);text-align:center;padding:28px 12px;font-size:13px}
+.vuln-followup{margin-top:8px;background:rgba(0,0,0,.25);border:1px solid var(--border);border-left:3px solid var(--cyan);padding:7px 10px;border-radius:4px;font-size:12px}
+.vuln-followup .fu-label{color:var(--cyan);font-size:11px;font-weight:600;letter-spacing:.3px;margin-bottom:3px}
+.vuln-followup code{color:var(--teal);word-break:break-all;cursor:pointer;font-family:var(--font-mono);font-size:12px}
+.vuln-followup code:hover{color:var(--accent);text-decoration:underline}
+.no-vulns{color:var(--green);text-align:center;padding:30px 12px;font-size:14px}
 
-/* ── GRAPH ────────────────────────────────────────────────────────────── */
-#graph-container{flex:1;position:relative;min-width:0}
+/* GRAPH */
+#graph-container{flex:1;position:relative;min-width:0;background:var(--bg)}
 #graph{width:100%;height:100%}
-.graph-overlay-tl{position:absolute;top:12px;left:12px;display:flex;flex-direction:column;gap:6px}
-.graph-legend{background:rgba(22,27,34,.92);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:11px;backdrop-filter:blur(4px)}
-.cluster-hint{background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.3);border-radius:6px;padding:7px 10px;font-size:11px;color:var(--accent)}
-.legend-row{display:flex;align-items:center;gap:7px;margin-bottom:3px}
+.graph-overlay-tl{position:absolute;top:12px;left:12px;display:flex;flex-direction:column;gap:8px}
+.graph-legend{background:rgba(22,27,34,.94);border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-size:12px;backdrop-filter:blur(6px)}
+.legend-title{color:var(--muted);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+.legend-row{display:flex;align-items:center;gap:8px;margin-bottom:5px;color:var(--text2)}
 .legend-row:last-child{margin-bottom:0}
-.legend-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
-.graph-ctrl{position:absolute;top:12px;right:12px;display:flex;flex-direction:column;gap:6px}
-.graph-btn-group{display:flex;gap:6px}
-.ctrl-btn{background:rgba(22,27,34,.92);border:1px solid var(--border);color:var(--text);padding:6px 11px;border-radius:6px;font-size:12px;cursor:pointer;backdrop-filter:blur(4px);transition:background .15s}
-.ctrl-btn:hover{background:var(--surface2)}
+.legend-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;border:1px solid}
+.graph-ctrl{position:absolute;top:12px;right:12px;display:flex;gap:6px}
+.ctrl-btn{background:rgba(22,27,34,.94);border:1px solid var(--border);color:var(--muted);padding:7px 14px;border-radius:6px;font-size:12px;cursor:pointer;font-family:var(--font-body);font-weight:500;transition:all .15s;backdrop-filter:blur(4px)}
+.ctrl-btn:hover{border-color:var(--accent);color:var(--accent)}
+.scan-info-overlay{position:absolute;bottom:12px;right:12px;background:rgba(22,27,34,.92);border:1px solid var(--border);border-radius:8px;padding:9px 14px;font-size:12px;color:var(--muted);max-width:380px;backdrop-filter:blur(4px)}
+.scan-info-overlay .cmd{color:var(--accent);font-size:11px;word-break:break-all;margin-top:3px;font-family:var(--font-mono)}
 
-/* ── HISTORY PANEL ────────────────────────────────────────────────────── */
+/* HISTORY PANEL */
 #history-panel{position:fixed;top:0;right:-420px;width:420px;height:100vh;background:var(--surface);border-left:1px solid var(--border);z-index:200;transition:right .3s ease;display:flex;flex-direction:column;box-shadow:-8px 0 32px rgba(0,0,0,.5)}
 #history-panel.open{right:0}
 .panel-header{display:flex;align-items:center;padding:14px 16px;border-bottom:1px solid var(--border);flex-shrink:0}
-.panel-header h3{font-size:15px;font-weight:700;flex:1}
+.panel-header h3{font-size:15px;font-weight:700;flex:1;color:var(--text)}
 .panel-body{flex:1;overflow-y:auto;padding:12px}
-.history-item{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px;cursor:pointer;transition:border-color .15s}
+.history-item{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px;cursor:pointer;transition:border-color .15s}
 .history-item:hover{border-color:var(--accent)}
-.history-item.active-scan{border-color:var(--green)}
-.hi-top{display:flex;align-items:center;gap:8px;margin-bottom:6px}
-.hi-ts{font-size:12px;font-weight:700;color:var(--text)}
-.hi-files{font-size:11px;color:var(--muted);margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.hi-stats{display:flex;gap:10px;font-size:11px}
-.hi-stat{display:flex;align-items:center;gap:3px;color:var(--muted)}
-.hi-actions{display:flex;gap:6px;margin-top:8px}
-.hi-btn{font-size:11px;padding:3px 9px;border-radius:4px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;transition:all .15s}
-.hi-btn:hover{background:var(--surface);color:var(--text)}
-.hi-btn-load{border-color:var(--accent);color:var(--accent)}
-.hi-btn-del{border-color:rgba(248,81,73,.4);color:var(--red)}
-.hi-btn-del:hover{background:rgba(248,81,73,.1)}
+.history-item.active-scan{border-color:var(--green);border-left:3px solid var(--green)}
+.hi-top{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.hi-ts{font-size:13px;font-weight:600;color:var(--text)}
+.hi-files{font-size:12px;color:var(--muted);margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hi-stats{display:flex;gap:10px;font-size:12px;flex-wrap:wrap}
+.hi-stat{color:var(--muted)}
+.hi-actions{display:flex;gap:5px;margin-top:8px;flex-wrap:wrap}
+.hi-btn{font-size:12px;padding:3px 10px;border-radius:4px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:var(--font-body);font-weight:500;transition:all .15s}
+.hi-btn:hover{border-color:var(--accent);color:var(--accent)}
+.hi-btn-load{border-color:rgba(77,157,224,.4);color:var(--accent)}
+.hi-btn-del{border-color:rgba(248,81,73,.3);color:var(--red)}
+.hi-btn-del:hover{background:rgba(248,81,73,.08)}
 .export-section{padding:12px;border-top:1px solid var(--border);flex-shrink:0}
-.export-section h4{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
-.export-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
-.export-btn{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;text-align:center;transition:all .15s}
+.export-section h4{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+.export-grid{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px}
+.export-btn{background:var(--surface2);border:1px solid var(--border);color:var(--text2);padding:9px;font-size:12px;font-weight:600;cursor:pointer;text-align:center;transition:all .15s;border-radius:6px;font-family:var(--font-body)}
 .export-btn:hover{border-color:var(--accent);color:var(--accent)}
 
-/* ── HELP MODAL ───────────────────────────────────────────────────────── */
+/* DRILL-DOWN MODAL */
+#drill-modal{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:300;display:none;align-items:center;justify-content:center;padding:20px}
+#drill-modal.open{display:flex}
+.drill-box{background:var(--surface);border:1px solid var(--border2);border-radius:12px;width:100%;max-width:900px;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 24px 80px rgba(0,0,0,.7)}
+.drill-header{display:flex;align-items:center;padding:16px 20px;border-bottom:1px solid var(--border);flex-shrink:0;gap:12px}
+.drill-header h2{font-size:16px;font-weight:700;flex:1;color:var(--text)}
+.drill-export-bar{display:flex;gap:6px}
+.drill-export-btn{font-size:12px;padding:5px 12px;border-radius:5px;border:1px solid var(--border2);background:transparent;color:var(--muted);cursor:pointer;font-family:var(--font-body);font-weight:500;transition:all .15s}
+.drill-export-btn:hover{border-color:var(--accent);color:var(--accent)}
+.drill-body{overflow-y:auto;padding:16px}
+.drill-table{width:100%;border-collapse:collapse;font-size:13px}
+.drill-table th{text-align:left;color:var(--muted);padding:7px 10px;border-bottom:1px solid var(--border);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;position:sticky;top:0;background:var(--surface)}
+.drill-table td{padding:8px 10px;border-bottom:1px solid rgba(33,48,61,.6);vertical-align:top}
+.drill-table tr:hover td{background:rgba(255,255,255,.02)}
+.drill-ip{font-family:var(--font-mono);color:var(--accent);font-weight:600}
+.drill-port{font-family:var(--font-mono);font-weight:600}
+.drill-sev{font-family:var(--font-mono);font-weight:700;font-size:11px}
+.drill-reason{color:var(--text2);font-size:12px;line-height:1.5}
+.drill-filter-bar{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.drill-filter{font-size:12px;padding:4px 12px;border-radius:20px;border:1px solid var(--border2);background:transparent;color:var(--muted);cursor:pointer;font-family:var(--font-body);font-weight:500;transition:all .15s}
+.drill-filter:hover,.drill-filter.active{border-color:var(--accent);color:var(--accent);background:rgba(77,157,224,.08)}
+.drill-count{font-size:12px;color:var(--muted);margin-left:auto;align-self:center}
+
+/* HELP MODAL */
 #help-modal{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:300;display:none;align-items:center;justify-content:center;padding:20px}
 #help-modal.open{display:flex}
-.modal-box{background:var(--surface);border:1px solid var(--border);border-radius:12px;width:100%;max-width:720px;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 24px 80px rgba(0,0,0,.6)}
+.modal-box{background:var(--surface);border:1px solid var(--border2);border-radius:12px;width:100%;max-width:780px;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 24px 80px rgba(0,0,0,.7)}
 .modal-header{display:flex;align-items:center;padding:16px 20px;border-bottom:1px solid var(--border);flex-shrink:0}
-.modal-header h2{font-size:16px;font-weight:700;flex:1}
+.modal-header h2{font-size:16px;font-weight:700;flex:1;color:var(--text)}
 .modal-body{overflow-y:auto;padding:20px}
 .help-section{margin-bottom:24px}
-.help-section h3{font-size:13px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border)}
-.cmd-block{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:10px 14px;margin-bottom:8px}
-.cmd-block code{display:block;color:var(--cyan);font-size:12px;font-family:monospace;margin-bottom:4px}
-.cmd-block p{font-size:12px;color:var(--muted);line-height:1.5}
-.flag-table{width:100%;border-collapse:collapse;font-size:12px;margin-top:6px}
-.flag-table th{text-align:left;color:var(--muted);padding:5px 8px;border-bottom:1px solid var(--border);font-size:11px;text-transform:uppercase}
-.flag-table td{padding:6px 8px;border-bottom:1px solid rgba(48,54,61,.5)}
-.flag-table td:first-child{font-family:monospace;color:var(--cyan);white-space:nowrap}
-.flag-table td:last-child{color:var(--muted)}
+.help-section h3{font-size:13px;font-weight:700;color:var(--accent);margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border);text-transform:uppercase;letter-spacing:.4px}
+.cmd-block{background:rgba(0,0,0,.3);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:4px;padding:10px 14px;margin-bottom:8px}
+.cmd-block code{display:block;color:var(--accent);font-size:13px;margin-bottom:5px;font-family:var(--font-mono)}
+.cmd-block p{font-size:13px;color:var(--text2);line-height:1.6}
+.flag-table{width:100%;border-collapse:collapse;font-size:13px;margin-top:6px}
+.flag-table th{text-align:left;color:var(--muted);padding:6px 10px;border-bottom:1px solid var(--border);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px}
+.flag-table td{padding:7px 10px;border-bottom:1px solid rgba(33,48,61,.7)}
+.flag-table td:first-child{font-family:var(--font-mono);color:var(--accent);white-space:nowrap;font-size:12px}
+.flag-table td:last-child{color:var(--text2);line-height:1.6}
 
-/* ── OVERLAY / LOADING ────────────────────────────────────────────────── */
-#overlay{position:fixed;inset:0;background:rgba(13,17,23,.85);display:none;align-items:center;justify-content:center;z-index:500;flex-direction:column;gap:14px}
+/* OVERLAY */
+#overlay{position:fixed;inset:0;background:rgba(13,17,23,.88);display:none;align-items:center;justify-content:center;z-index:500;flex-direction:column;gap:14px}
 #overlay.show{display:flex}
 .spinner{width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
+#overlay-text{color:var(--text2);font-size:14px;font-weight:500}
 
-/* ── MISC ─────────────────────────────────────────────────────────────── */
-.empty-state{text-align:center;padding:28px 14px;color:var(--muted);font-size:13px}
-::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
-.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 18px;font-size:13px;z-index:600;opacity:0;transition:opacity .3s;pointer-events:none}
+/* MISC */
+.empty-state{text-align:center;padding:30px 14px;color:var(--muted);font-size:13px}
+::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}::-webkit-scrollbar-thumb:hover{background:var(--muted)}
+.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:10px 20px;font-size:13px;z-index:600;opacity:0;transition:opacity .3s;pointer-events:none;font-weight:500;color:var(--text)}
 .toast.show{opacity:1}
-.merged-notice{background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.3);border-radius:6px;padding:8px 12px;font-size:12px;color:var(--green);margin-bottom:10px}
 </style>
 </head>
 <body>
-
-<!-- LOADING OVERLAY -->
+<canvas id="matrix-canvas"></canvas>
 <div id="overlay"><div class="spinner"></div><span id="overlay-text">Processing scan files...</span></div>
 <div class="toast" id="toast"></div>
 
-<!-- ── UPLOAD SCREEN ─────────────────────────────────────────────────────── -->
-<div id="upload-zone">
-  <div class="drop-area" id="drop-area" onclick="document.getElementById('file-input').click()">
-    <div class="drop-logo">
-      <!-- NmapViz SVG Logo -->
-      <svg width="72" height="72" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="50" cy="50" r="44" fill="none" stroke="#58a6ff" stroke-width="1" opacity="0.2"/>
-        <circle cx="50" cy="50" r="30" fill="none" stroke="#58a6ff" stroke-width="1" opacity="0.35"/>
-        <circle cx="50" cy="50" r="16" fill="none" stroke="#58a6ff" stroke-width="1" opacity="0.55"/>
-        <line x1="50" y1="6" x2="50" y2="94" stroke="#58a6ff" stroke-width="0.5" opacity="0.2"/>
-        <line x1="6" y1="50" x2="94" y2="50" stroke="#58a6ff" stroke-width="0.5" opacity="0.2"/>
-        <path d="M50 50 L94 50 A44 44 0 0 0 50 6 Z" fill="#58a6ff" opacity="0.07"/>
-        <line x1="50" y1="50" x2="79" y2="24" stroke="#f85149" stroke-width="1.2" opacity="0.8"/>
-        <line x1="50" y1="50" x2="72" y2="72" stroke="#d98634" stroke-width="1.2" opacity="0.8"/>
-        <line x1="50" y1="50" x2="82" y2="53" stroke="#3fb950" stroke-width="1.2" opacity="0.8"/>
-        <line x1="50" y1="50" x2="35" y2="76" stroke="#bc8cff" stroke-width="1.2" opacity="0.8"/>
-        <circle cx="79" cy="24" r="4.5" fill="#f85149"/>
-        <circle cx="72" cy="72" r="3.5" fill="#d98634"/>
-        <circle cx="82" cy="53" r="3.5" fill="#3fb950"/>
-        <circle cx="35" cy="76" r="3.5" fill="#bc8cff"/>
-        <circle cx="50" cy="50" r="6" fill="#58a6ff"/>
-        <circle cx="50" cy="50" r="3" fill="#0d1117"/>
-      </svg>
+<!-- ========== UPLOAD SCREEN ========== -->
+<div id="upload-zone" class="active">
+  <div class="upload-topbar">
+    <div class="logo">
+      <svg width="26" height="26" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="100" rx="18" fill="#0d1117"/><circle cx="50" cy="50" r="38" fill="none" stroke="#4d9de0" stroke-width="2" opacity=".35"/><circle cx="50" cy="50" r="22" fill="none" stroke="#4d9de0" stroke-width="2" opacity=".55"/><path d="M50 50 L94 50 A44 44 0 0 0 50 6 Z" fill="#4d9de0" opacity=".06"/><line x1="50" y1="50" x2="76" y2="26" stroke="#7c3aed" stroke-width="2.5"/><line x1="50" y1="50" x2="75" y2="73" stroke="#f85149" stroke-width="2.5"/><line x1="50" y1="50" x2="82" y2="51" stroke="#3fb950" stroke-width="2"/><circle cx="76" cy="26" r="5" fill="#7c3aed"/><circle cx="75" cy="73" r="4.5" fill="#f85149"/><circle cx="82" cy="51" r="4" fill="#3fb950"/><circle cx="50" cy="50" r="6" fill="#1f3a52" stroke="#4d9de0" stroke-width="1.5"/><circle cx="50" cy="50" r="2.5" fill="#4d9de0"/></svg>
+      <span class="logo-wordmark">NmapViz</span>
     </div>
-    <h2>Import nmap scan results</h2>
-    <p>Drag one or more <strong>.xml</strong> files here, or click to select</p>
-    <div class="multi-badge">✓ Multi-file supported — files will be merged</div>
-    <div class="drop-hint">
-      <p>Generate XML output with nmap:</p>
-      <p><code>nmap -sV -oX output.xml 192.168.1.0/24</code> &nbsp;— version detection (recommended)</p>
-      <p><code>nmap -A -oX output.xml 192.168.1.0/24</code> &nbsp;— aggressive (OS + scripts + versions)</p>
-      <p><code>nmap -sV --script vuln -oX out.xml target</code> &nbsp;— vulnerability scripts</p>
+    <div style="margin-left:auto;display:flex;gap:8px">
+      <button class="btn-icon" onclick="openHelp()">📖 Reference</button>
+      <button class="btn-icon" onclick="openHistory()">🕑 History</button>
     </div>
   </div>
-  <button class="btn btn-ghost" onclick="openHelp()" style="gap:6px">📖 nmap command reference & tips</button>
-  <input type="file" id="file-input" accept=".xml" multiple>
+  <div class="upload-content">
+    <div class="drop-area" id="drop-area" onclick="document.getElementById('file-input').click()">
+      <div style="margin-bottom:20px">
+        <svg width="64" height="64" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="50" cy="50" r="44" fill="none" stroke="#4d9de0" stroke-width="1" opacity=".2"/>
+          <circle cx="50" cy="50" r="30" fill="none" stroke="#4d9de0" stroke-width="1" opacity=".35"/>
+          <circle cx="50" cy="50" r="16" fill="none" stroke="#4d9de0" stroke-width="1" opacity=".55"/>
+          <line x1="50" y1="6" x2="50" y2="94" stroke="#4d9de0" stroke-width=".5" opacity=".12"/>
+          <line x1="6" y1="50" x2="94" y2="50" stroke="#4d9de0" stroke-width=".5" opacity=".12"/>
+          <path d="M50 50 L94 50 A44 44 0 0 0 50 6 Z" fill="#4d9de0" opacity=".06"/>
+          <line x1="50" y1="50" x2="79" y2="24" stroke="#7c3aed" stroke-width="1.5" opacity=".9"/>
+          <line x1="50" y1="50" x2="72" y2="74" stroke="#f85149" stroke-width="1.5" opacity=".9"/>
+          <line x1="50" y1="50" x2="84" y2="52" stroke="#3fb950" stroke-width="1.5" opacity=".9"/>
+          <line x1="50" y1="50" x2="34" y2="77" stroke="#e07a30" stroke-width="1.2" opacity=".8"/>
+          <circle cx="79" cy="24" r="5" fill="#7c3aed"/>
+          <circle cx="72" cy="74" r="4.5" fill="#f85149"/>
+          <circle cx="84" cy="52" r="4" fill="#3fb950"/>
+          <circle cx="34" cy="77" r="4" fill="#e07a30"/>
+          <circle cx="50" cy="50" r="7" fill="#1f3a52" stroke="#4d9de0" stroke-width="1.5"/>
+          <circle cx="50" cy="50" r="3" fill="#4d9de0"/>
+        </svg>
+      </div>
+      <h2>Import nmap Scan Results</h2>
+      <p class="sub">Drop one or more <strong>.xml</strong> files here, or click to select</p>
+      <div class="multi-badge">✓ Multi-file supported. files will be merged automatically</div>
+      <div class="drop-hint">
+        <p><code>nmap -sV -oX output.xml 192.168.1.0/24</code> . version detection (recommended)</p>
+        <p><code>nmap -A -oX output.xml 192.168.1.0/24</code> . aggressive: OS + scripts + versions</p>
+        <p><code>nmap -sV --script vuln -oX out.xml target</code> . vulnerability detection</p>
+      </div>
+    </div>
+    <div class="upload-history-bar" id="upload-hist-wrap" style="display:none">
+      <details>
+        <summary>🕑 Recent Scans <span id="upload-hist-count" style="color:var(--muted);font-weight:400"></span></summary>
+        <div class="upload-hist-list" id="upload-hist-list"></div>
+      </details>
+    </div>
+    <input type="file" id="file-input" accept=".xml" multiple>
+  </div>
 </div>
 
-<!-- ── MAIN APP ──────────────────────────────────────────────────────────── -->
+<!-- ========== MAIN APP ========== -->
 <div id="app">
-  <!-- TOP BAR -->
   <div class="topbar">
     <div class="logo">
-      <svg width="28" height="28" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="50" cy="50" r="44" fill="none" stroke="#58a6ff" stroke-width="1.5" opacity="0.3"/>
-        <circle cx="50" cy="50" r="28" fill="none" stroke="#58a6ff" stroke-width="1.5" opacity="0.45"/>
-        <circle cx="50" cy="50" r="14" fill="none" stroke="#58a6ff" stroke-width="1.5" opacity="0.65"/>
-        <path d="M50 50 L94 50 A44 44 0 0 0 50 6 Z" fill="#58a6ff" opacity="0.1"/>
-        <line x1="50" y1="50" x2="79" y2="24" stroke="#f85149" stroke-width="1.5" opacity="0.9"/>
-        <line x1="50" y1="50" x2="74" y2="73" stroke="#d98634" stroke-width="1.5" opacity="0.9"/>
-        <line x1="50" y1="50" x2="82" y2="52" stroke="#3fb950" stroke-width="1.5" opacity="0.9"/>
-        <circle cx="79" cy="24" r="4" fill="#f85149"/>
-        <circle cx="74" cy="73" r="3.5" fill="#d98634"/>
-        <circle cx="82" cy="52" r="3.5" fill="#3fb950"/>
-        <circle cx="50" cy="50" r="5" fill="#58a6ff"/>
-        <circle cx="50" cy="50" r="2.5" fill="#0d1117"/>
-      </svg>
-      <span class="logo-text">NmapViz <span>v2</span></span>
+      <svg width="26" height="26" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="100" rx="18" fill="#0d1117"/><circle cx="50" cy="50" r="38" fill="none" stroke="#4d9de0" stroke-width="2" opacity=".35"/><circle cx="50" cy="50" r="22" fill="none" stroke="#4d9de0" stroke-width="2" opacity=".55"/><line x1="50" y1="50" x2="76" y2="26" stroke="#7c3aed" stroke-width="2.5"/><line x1="50" y1="50" x2="75" y2="73" stroke="#f85149" stroke-width="2.5"/><line x1="50" y1="50" x2="82" y2="51" stroke="#3fb950" stroke-width="2"/><circle cx="76" cy="26" r="5" fill="#7c3aed"/><circle cx="75" cy="73" r="4.5" fill="#f85149"/><circle cx="82" cy="51" r="4" fill="#3fb950"/><circle cx="50" cy="50" r="6" fill="#1f3a52" stroke="#4d9de0" stroke-width="1.5"/><circle cx="50" cy="50" r="2.5" fill="#4d9de0"/></svg>
+      <span class="logo-wordmark">NmapViz</span>
     </div>
     <div class="topbar-sep"></div>
     <div class="scan-badges" id="scan-badges"></div>
     <div class="topbar-right">
-      <button class="btn-icon" onclick="openHelp()" title="Help & nmap reference">📖</button>
-      <button class="btn-icon" onclick="openHistory()" title="Scan history" id="history-btn">🕑 History</button>
-      <button class="btn btn-ghost" onclick="resetApp()">+ New Scan</button>
+      <button class="btn-icon" onclick="openHelp()">📖 Reference</button>
+      <button class="btn-icon" onclick="openHistory()">🕑 History</button>
+      <button class="btn btn-primary" onclick="resetApp()">+ New Scan</button>
     </div>
   </div>
 
-  <!-- STATS BAR -->
   <div class="stats-bar">
-    <div class="stat stat-green"><span class="val" id="s-hosts">0</span><span class="lbl">Hosts</span></div>
-    <div class="stat"><span class="val" id="s-ports">0</span><span class="lbl">Open Ports</span></div>
-    <div class="stat stat-red"><span class="val" id="s-crit">0</span><span class="lbl">Critical</span></div>
-    <div class="stat stat-orange"><span class="val" id="s-inter">0</span><span class="lbl">Interesting</span></div>
-    <div class="stat stat-purple"><span class="val" id="s-vulns">0</span><span class="lbl">Vulnerabilities</span></div>
+    <div class="stat stat-blue"   onclick="openDrill('all')"         title="View all hosts"><span class="val" id="s-hosts">0</span><span class="lbl">Hosts</span></div>
+    <div class="stat"             onclick="openDrill('ports')"       title="View all open ports"><span class="val" id="s-ports">0</span><span class="lbl">Open Ports</span></div>
+    <div class="stat stat-crit"   onclick="openDrill('critical')"    title="View critical ports"><span class="val" id="s-crit">0</span><span class="lbl">Critical</span></div>
+    <div class="stat stat-high"   onclick="openDrill('interesting')" title="View interesting ports"><span class="val" id="s-inter">0</span><span class="lbl">Interesting</span></div>
+    <div class="stat stat-purple" onclick="openDrill('vulns')"       title="View all vulnerabilities"><span class="val" id="s-vulns">0</span><span class="lbl">Findings</span></div>
     <div class="stat-args" id="s-args"></div>
   </div>
 
-  <!-- MAIN -->
   <div class="main-layout">
-    <!-- SIDEBAR -->
     <div class="sidebar" id="sidebar">
+      <div class="sidebar-resize" id="sidebar-resize"></div>
       <div class="sidebar-tabs">
         <button class="tab-btn active" onclick="switchTab('hosts')">🖥 Hosts</button>
         <button class="tab-btn" onclick="switchTab('ports')">🔌 Ports</button>
         <button class="tab-btn" onclick="switchTab('vulns')">⚠️ Vulns</button>
       </div>
       <div class="tab-content active" id="tab-hosts"><div id="host-list"></div></div>
-      <div class="tab-content" id="tab-ports"><div id="detail-panel"><p class="empty-state">Select a host in the graph or list</p></div></div>
-      <div class="tab-content" id="tab-vulns"><div id="vuln-panel"><p class="empty-state">Select a host to view vulnerabilities</p></div></div>
+      <div class="tab-content" id="tab-ports"><div id="detail-panel"><p class="empty-state">Select a host to view ports</p></div></div>
+      <div class="tab-content" id="tab-vulns"><div id="vuln-panel"><p class="empty-state">Select a host to view findings</p></div></div>
     </div>
-
-    <!-- GRAPH AREA -->
     <div id="graph-container">
       <div id="graph"></div>
       <div class="graph-overlay-tl">
         <div class="graph-legend">
-          <div class="legend-row"><div class="legend-dot" style="background:#58a6ff"></div>Scanner</div>
-          <div class="legend-row"><div class="legend-dot" style="background:#30a3f5;border:2px solid #58a6ff"></div>Subnet cluster (dbl-click to expand)</div>
-          <div class="legend-row"><div class="legend-dot" style="background:#3fb950"></div>Host — normal</div>
-          <div class="legend-row"><div class="legend-dot" style="background:#d98634"></div>Host — interesting ports</div>
-          <div class="legend-row"><div class="legend-dot" style="background:#f85149"></div>Host — critical ports</div>
-          <div class="legend-row"><div class="legend-dot" style="background:#bc8cff"></div>Host — vulnerabilities detected</div>
+          <div class="legend-title">Node Legend</div>
+          <div class="legend-row"><div class="legend-dot" style="background:#1f3a52;border-color:#4d9de0"></div>Scanner</div>
+          <div class="legend-row"><div class="legend-dot" style="background:#4d9de018;border-color:#4d9de0"></div>Subnet cluster (dbl-click)</div>
+          <div class="legend-row"><div class="legend-dot" style="background:#3fb95015;border-color:#3fb950"></div>Host. no findings</div>
+          <div class="legend-row"><div class="legend-dot" style="background:#f8514918;border-color:#f85149"></div>Host. interesting ports</div>
+          <div class="legend-row"><div class="legend-dot" style="background:#7c3aed18;border-color:#7c3aed"></div>Host. critical ports</div>
+          <div class="legend-row"><div class="legend-dot" style="background:#e07a3018;border-color:#e07a30"></div>Host. vulnerabilities</div>
         </div>
       </div>
       <div class="graph-ctrl">
-        <div class="graph-btn-group">
-          <button class="ctrl-btn" onclick="network&&network.fit()">⊕ Fit</button>
-          <button class="ctrl-btn" onclick="togglePhysics()">⚙ Physics</button>
-          <button class="ctrl-btn" onclick="toggleClustering()" id="cluster-btn">⬡ Cluster</button>
-        </div>
+        <button class="ctrl-btn" onclick="network&&network.fit()">⊕ Fit</button>
+        <button class="ctrl-btn" onclick="togglePhysics()">⚙ Physics</button>
+        <button class="ctrl-btn" onclick="toggleClustering()" id="cluster-btn">⬡ Cluster</button>
+      </div>
+      <div class="scan-info-overlay" id="scan-info-overlay" style="display:none">
+        <span id="scan-info-text"></span>
+        <div class="cmd" id="scan-info-cmd"></div>
       </div>
     </div>
   </div>
 </div>
 
-<!-- ── HISTORY PANEL ─────────────────────────────────────────────────────── -->
+<!-- ========== HISTORY PANEL ========== -->
 <div id="history-panel">
   <div class="panel-header">
     <h3>🕑 Scan History</h3>
-    <button class="btn-icon" onclick="closeHistory()" style="padding:4px 8px">✕</button>
+    <button class="btn-icon" onclick="closeHistory()">✕</button>
   </div>
   <div class="panel-body" id="history-list"></div>
   <div class="export-section" id="export-section" style="display:none">
     <h4>Export current scan</h4>
     <div class="export-grid">
-      <button class="export-btn" onclick="downloadReport('json')">⬇ JSON</button>
-      <button class="export-btn" onclick="downloadReport('html')">⬇ HTML</button>
-      <button class="export-btn" onclick="downloadReport('markdown')">⬇ Markdown</button>
+      <button class="export-btn" onclick="downloadReport('json')">JSON</button>
+      <button class="export-btn" onclick="downloadReport('html')">HTML</button>
+      <button class="export-btn" onclick="downloadReport('markdown')">MD</button>
+      <button class="export-btn" onclick="downloadReport('pdf')" style="color:var(--sc);border-color:rgba(124,58,237,.3)">PDF</button>
     </div>
   </div>
 </div>
 
-<!-- ── HELP MODAL ─────────────────────────────────────────────────────────── -->
+<!-- ========== DRILL-DOWN MODAL ========== -->
+<div id="drill-modal" onclick="if(event.target===this)closeDrill()">
+  <div class="drill-box">
+    <div class="drill-header">
+      <h2 id="drill-title">Port Details</h2>
+      <div class="drill-export-bar">
+        <button class="drill-export-btn" onclick="exportDrill('csv')">⬇ CSV</button>
+        <button class="drill-export-btn" onclick="exportDrill('json')">⬇ JSON</button>
+      </div>
+      <button class="btn-icon" onclick="closeDrill()" style="margin-left:8px">✕</button>
+    </div>
+    <div class="drill-body">
+      <div class="drill-filter-bar" id="drill-filter-bar"></div>
+      <table class="drill-table" id="drill-table">
+        <thead id="drill-thead"></thead>
+        <tbody id="drill-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ========== HELP MODAL ========== -->
 <div id="help-modal" onclick="if(event.target===this)closeHelp()">
   <div class="modal-box">
     <div class="modal-header">
-      <h2>📖 nmap Reference & Scanning Tips</h2>
-      <button class="btn-icon" onclick="closeHelp()" style="padding:4px 8px">✕</button>
+      <h2>📖 nmap Reference and Scanning Guide</h2>
+      <button class="btn-icon" onclick="closeHelp()">✕</button>
     </div>
     <div class="modal-body">
-
       <div class="help-section">
         <h3>Essential Commands</h3>
-        <div class="cmd-block">
-          <code>nmap -sV -oX output.xml 192.168.1.0/24</code>
-          <p>Basic scan with version detection. The recommended starting point for most assessments.</p>
-        </div>
-        <div class="cmd-block">
-          <code>nmap -A -oX output.xml 192.168.1.0/24</code>
-          <p>Aggressive scan: OS detection + version detection + script scanning + traceroute. More noise, more data.</p>
-        </div>
-        <div class="cmd-block">
-          <code>nmap -sV --script vuln -oX output.xml [target]</code>
-          <p>Version detection + vulnerability scripts (NSE). Detects EternalBlue, Heartbleed, SMB issues, etc. Takes longer.</p>
-        </div>
-        <div class="cmd-block">
-          <code>nmap -sV --script default,vuln -oX output.xml [target]</code>
-          <p>Default + vulnerability scripts combined. Best balance between coverage and speed.</p>
-        </div>
+        <div class="cmd-block"><code>nmap -sV -oX output.xml 192.168.1.0/24</code><p>Version detection. The recommended starting point. enables vulnerability matching in NmapViz.</p></div>
+        <div class="cmd-block"><code>nmap -A -oX output.xml 192.168.1.0/24</code><p>Aggressive: OS detection + version + default scripts + traceroute. More data, more noise.</p></div>
+        <div class="cmd-block"><code>nmap -sV --script vuln -oX output.xml [target]</code><p>Vulnerability scripts: EternalBlue, Heartbleed, SMB issues, FTP anon, RDP checks, etc.</p></div>
+        <div class="cmd-block"><code>nmap -sV --script default,vuln -oX output.xml [target]</code><p>Default + vuln scripts combined. Best coverage/time balance.</p></div>
       </div>
-
       <div class="help-section">
-        <h3>Performance Flags — Large Networks</h3>
+        <h3>Performance. Large Networks</h3>
         <table class="flag-table">
-          <tr><th>Flag</th><th>Description</th></tr>
-          <tr><td>--top-ports 100</td><td>Only scan the 100 most common ports. Up to 10× faster on large subnets. Use 150–500 for better coverage.</td></tr>
-          <tr><td>-T4</td><td>Aggressive timing. Faster but slightly less accurate. Ideal for internal networks with low latency.</td></tr>
-          <tr><td>-T5</td><td>Insane timing. Use only on localhost or very stable LANs — misses results on slower networks.</td></tr>
-          <tr><td>--min-rate 1000</td><td>Send at least 1000 packets/sec. Good for fast internal scans.</td></tr>
-          <tr><td>-n</td><td>Skip DNS resolution. Speeds up scans significantly when hostnames aren't needed.</td></tr>
-          <tr><td>--open</td><td>Show only open ports. Reduces output noise considerably.</td></tr>
-          <tr><td>-Pn</td><td>Skip host discovery (treat all hosts as up). Useful when ICMP is blocked.</td></tr>
-          <tr><td>--exclude [IPs]</td><td>Exclude specific hosts (e.g. printers, fragile equipment).</td></tr>
+          <tr><th>Flag</th><th>Effect</th></tr>
+          <tr><td>--top-ports 100</td><td>Only scan the 100 most common ports. Up to 10x faster on large subnets.</td></tr>
+          <tr><td>-T4</td><td>Aggressive timing. Faster with minor accuracy tradeoff. Ideal for stable LANs.</td></tr>
+          <tr><td>-T5</td><td>Insane timing. Only on localhost or very stable networks.</td></tr>
+          <tr><td>--min-rate 1000</td><td>Send at least 1000 pkts/s. Good for fast internal scans.</td></tr>
+          <tr><td>-n</td><td>Skip DNS resolution. Significant speed boost.</td></tr>
+          <tr><td>--open</td><td>Show only open ports. Reduces output considerably.</td></tr>
+          <tr><td>-Pn</td><td>Skip host discovery. Use when ICMP is blocked.</td></tr>
+          <tr><td>--exclude [IPs]</td><td>Exclude specific hosts (printers, fragile devices, etc).</td></tr>
         </table>
       </div>
-
       <div class="help-section">
-        <h3>Large Subnet Strategy</h3>
-        <div class="cmd-block">
-          <code>nmap -sV --top-ports 150 -T4 -n --open -oX fast_scan.xml 10.0.0.0/16</code>
-          <p>Fast wide-coverage scan for large networks (/16 or bigger). Scans top 150 ports, aggressive timing, no DNS.</p>
-        </div>
-        <div class="cmd-block">
-          <code>nmap -sV --top-ports 500 -T4 -oX medium_scan.xml 192.168.0.0/24</code>
-          <p>More thorough scan for a /24. Good balance between coverage and time (~5–15 min).</p>
-        </div>
-        <div class="cmd-block">
-          <code>nmap -sV -p- -T4 -oX full_scan.xml [target]</code>
-          <p>Full port scan (all 65535 ports). Only for individual hosts — very slow on subnets.</p>
-        </div>
+        <h3>Large Network Strategy</h3>
+        <div class="cmd-block"><code>nmap -sV --top-ports 150 -T4 -n --open -oX fast.xml 10.0.0.0/16</code><p>Fast wide-coverage scan for /16 or larger. Top 150 ports, aggressive timing, no DNS.</p></div>
+        <div class="cmd-block"><code>nmap -sV --top-ports 500 -T4 -oX scan.xml 192.168.0.0/24</code><p>Thorough /24 scan. Good balance between coverage and time (5-15 min).</p></div>
+        <div class="cmd-block"><code>nmap -sV -p- -T4 -oX full.xml [single-target]</code><p>Full port scan (all 65535). Only feasible on individual hosts.</p></div>
       </div>
-
+      <div class="help-section">
+        <h3>Multi-File Scanning (NmapViz feature)</h3>
+        <div class="cmd-block"><code>nmap -sV -oX scan_192.xml 192.168.1.0/24
+nmap -sV -oX scan_10.xml  10.0.0.0/24</code><p>Scan different subnets separately, then drop both XMLs into NmapViz at once. They are merged automatically.</p></div>
+      </div>
       <div class="help-section">
         <h3>Useful NSE Scripts</h3>
         <table class="flag-table">
-          <tr><th>Script / Category</th><th>What it does</th></tr>
-          <tr><td>--script vuln</td><td>Known CVEs: EternalBlue, Heartbleed, SMB issues, Shellshock, etc.</td></tr>
-          <tr><td>--script smb-security-mode</td><td>SMB signing status. Critical for relay attack detection.</td></tr>
-          <tr><td>--script smb2-security-mode</td><td>SMBv2 signing enforcement check.</td></tr>
-          <tr><td>--script ftp-anon</td><td>Checks if FTP allows anonymous login.</td></tr>
-          <tr><td>--script ssh-auth-methods</td><td>Lists SSH authentication methods (password vs key).</td></tr>
-          <tr><td>--script rdp-enum-encryption</td><td>Checks if RDP uses NLA or weak encryption.</td></tr>
-          <tr><td>--script dns-zone-transfer</td><td>Attempts DNS zone transfer (AXFR).</td></tr>
-          <tr><td>--script http-default-accounts</td><td>Tests default credentials on web interfaces.</td></tr>
+          <tr><th>Script / Category</th><th>What it detects</th></tr>
+          <tr><td>--script vuln</td><td>Known CVEs: EternalBlue, Heartbleed, SMB issues, Shellshock, and more.</td></tr>
+          <tr><td>--script smb-security-mode</td><td>SMB signing status. Critical for NTLM relay detection.</td></tr>
+          <tr><td>--script ftp-anon</td><td>FTP anonymous login check.</td></tr>
+          <tr><td>--script ssh-auth-methods</td><td>SSH authentication methods (password vs key).</td></tr>
+          <tr><td>--script rdp-enum-encryption</td><td>RDP NLA and encryption checks.</td></tr>
+          <tr><td>--script dns-zone-transfer</td><td>DNS AXFR attempt.</td></tr>
+          <tr><td>--script http-default-accounts</td><td>Default credentials on web interfaces.</td></tr>
+          <tr><td>--script ipmi-version,ipmi-brute</td><td>IPMI/BMC detection and auth bypass.</td></tr>
+          <tr><td>--script redis-info</td><td>Redis unauthenticated access check.</td></tr>
         </table>
       </div>
-
       <div class="help-section">
-        <h3>Multi-File Scanning Tips</h3>
-        <div class="cmd-block">
-          <code>nmap -sV -oX scan_192.xml 192.168.1.0/24<br>nmap -sV -oX scan_10.xml 10.0.0.0/24</code>
-          <p>Scan different subnets separately and drop both XML files into NmapViz — they will be merged automatically, deduplicating hosts and combining port data.</p>
-        </div>
-        <div class="cmd-block">
-          <code>nmap --top-ports 100 -oX quick.xml 192.168.1.0/24<br>nmap -sV -p 22,80,443,445 -oX detailed.xml 192.168.1.0/24</code>
-          <p>Combine a quick sweep with a detailed service scan on specific ports. Merge both in NmapViz for the most complete picture.</p>
-        </div>
-      </div>
-
-      <div class="help-section">
-        <h3>Stealth & Detection Evasion</h3>
+        <h3>Stealth and Evasion</h3>
         <table class="flag-table">
-          <tr><th>Flag</th><th>Description</th></tr>
+          <tr><th>Flag</th><th>Effect</th></tr>
           <tr><td>-sS</td><td>SYN scan (default). Half-open, less likely to be logged.</td></tr>
           <tr><td>-T1 / -T2</td><td>Paranoid/sneaky timing. Very slow but harder to detect.</td></tr>
-          <tr><td>--randomize-hosts</td><td>Scan hosts in random order. Avoids sequential pattern detection.</td></tr>
-          <tr><td>-D RND:5</td><td>Decoy scan with 5 random IPs. Obscures the real source.</td></tr>
-          <tr><td>-f</td><td>Fragment packets. Bypasses some firewalls/IDS.</td></tr>
+          <tr><td>--randomize-hosts</td><td>Scan hosts in random order.</td></tr>
+          <tr><td>-D RND:5</td><td>Decoy scan with 5 random source IPs.</td></tr>
+          <tr><td>-f</td><td>Fragment packets. Bypasses some firewalls.</td></tr>
         </table>
-        <p style="font-size:12px;color:var(--muted);margin-top:8px">⚠️ Only use evasion techniques on networks you are authorised to test.</p>
+        <p style="font-size:12px;color:var(--muted);margin-top:10px">Only use evasion techniques on networks you are authorised to test.</p>
       </div>
-
     </div>
   </div>
 </div>
 
 <script>
-// ─────────────────────────────────────────────────────────────────────────────
-// STATE
-// ─────────────────────────────────────────────────────────────────────────────
-let scanData     = null;
-let currentScanId = null;
-let network      = null;
-let nodesDS      = null;
-let edgesDS      = null;
-let selectedHost = null;
-let physicsOn    = true;
-let clustered    = false;
+// ── MATRIX RAIN ───────────────────────────────────────────────────────────
+(function(){
+  const c=document.getElementById('matrix-canvas'),ctx=c.getContext('2d');
+  function resize(){c.width=window.innerWidth;c.height=window.innerHeight}
+  resize();window.addEventListener('resize',resize);
+  const chars='0123456789ABCDEF><[]NMAP';
+  const cols=Math.floor(c.width/16);
+  const drops=Array.from({length:cols},()=>Math.random()*-60);
+  function draw(){
+    ctx.fillStyle='rgba(13,17,23,.1)';ctx.fillRect(0,0,c.width,c.height);
+    ctx.font='12px monospace';
+    for(let i=0;i<drops.length;i++){
+      ctx.fillStyle=i%3===0?'#4d9de0':'#7c3aed';
+      ctx.globalAlpha=Math.random()*.3+.05;
+      ctx.fillText(chars[Math.floor(Math.random()*chars.length)],i*16,drops[i]*16);
+      if(drops[i]*16>c.height&&Math.random()>.978)drops[i]=0;
+      drops[i]+=.4;
+    }
+    ctx.globalAlpha=1;
+  }
+  setInterval(draw,70);
+})();
 
-// ─────────────────────────────────────────────────────────────────────────────
-// FILE UPLOAD
-// ─────────────────────────────────────────────────────────────────────────────
-const dropArea = document.getElementById('drop-area');
-dropArea.addEventListener('dragover', e => { e.preventDefault(); dropArea.classList.add('drag'); });
-dropArea.addEventListener('dragleave', () => dropArea.classList.remove('drag'));
-dropArea.addEventListener('drop', e => {
-  e.preventDefault(); dropArea.classList.remove('drag');
-  if (e.dataTransfer.files.length) uploadFiles(e.dataTransfer.files);
-});
-document.getElementById('file-input').addEventListener('change', e => {
-  if (e.target.files.length) uploadFiles(e.target.files);
-});
+// ── STATE ─────────────────────────────────────────────────────────────────
+let scanData=null,currentScanId=null,network=null,nodesDS=null,edgesDS=null;
+let selectedHost=null,physicsOn=true,clustered=false;
+let drillData=[],drillMode='',drillFilter='all';
 
-function uploadFiles(files) {
-  const fd = new FormData();
-  for (const f of files) fd.append('files', f);
-  showOverlay('Processing ' + files.length + ' file(s)...');
-  fetch('/api/parse', { method: 'POST', body: fd })
-    .then(r => r.json())
-    .then(res => {
+// ── FILE UPLOAD ───────────────────────────────────────────────────────────
+const dropArea=document.getElementById('drop-area');
+dropArea.addEventListener('dragover',e=>{e.preventDefault();dropArea.classList.add('drag')});
+dropArea.addEventListener('dragleave',()=>dropArea.classList.remove('drag'));
+dropArea.addEventListener('drop',e=>{e.preventDefault();dropArea.classList.remove('drag');if(e.dataTransfer.files.length)uploadFiles(e.dataTransfer.files)});
+document.getElementById('file-input').addEventListener('change',e=>{if(e.target.files.length)uploadFiles(e.target.files)});
+
+function uploadFiles(files){
+  const fd=new FormData();
+  for(const f of files)fd.append('files',f);
+  showOverlay('Processing '+files.length+' file(s)...');
+  fetch('/api/parse',{method:'POST',body:fd})
+    .then(r=>r.json()).then(res=>{
       hideOverlay();
-      if (res.error) { showToast('❌ ' + res.error, true); return; }
-      scanData      = res.data;
-      currentScanId = res.scan_id;
-      if (res.merged) showToast('✅ ' + files.length + ' files merged successfully');
+      if(res.error){showToast('Error: '+res.error);return}
+      scanData=res.data;currentScanId=res.scan_id;
+      if(res.merged)showToast('Merged '+files.length+' files successfully');
       initApp();
-    })
-    .catch(err => { hideOverlay(); showToast('❌ Connection error: ' + err, true); });
+    }).catch(err=>{hideOverlay();showToast('Error: '+err)});
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// APP INIT
-// ─────────────────────────────────────────────────────────────────────────────
-function initApp() {
-  document.getElementById('upload-zone').style.display = 'none';
-  document.getElementById('app').style.display = 'flex';
-  selectedHost = null;
-  updateStats();
-  renderBadges();
-  renderHostList();
-  renderGraph();
-  updateExportSection();
+// ── INIT ──────────────────────────────────────────────────────────────────
+function initApp(){
+  document.getElementById('upload-zone').classList.remove('active');
+  document.getElementById('app').classList.add('active');
+  selectedHost=null;
+  updateStats();renderBadges();renderHostList();renderGraph();updateExportSection();
+}
+function resetApp(){
+  scanData=null;currentScanId=null;selectedHost=null;
+  document.getElementById('app').classList.remove('active');
+  document.getElementById('upload-zone').classList.add('active');
+  document.getElementById('file-input').value='';
+  if(network){network.destroy();network=null}
+  clustered=false;
+  loadUploadHistory();
 }
 
-function resetApp() {
-  scanData = null; currentScanId = null; selectedHost = null;
-  document.getElementById('app').style.display = 'none';
-  document.getElementById('upload-zone').style.display = 'flex';
-  document.getElementById('file-input').value = '';
-  if (network) { network.destroy(); network = null; }
-  clustered = false;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// STATS & BADGES
-// ─────────────────────────────────────────────────────────────────────────────
-function hostColor(h) {
-  if (h.vulns && h.vulns.length)                               return '#bc8cff';
-  if (h.ports.some(p => p.classification === 'critical'))      return '#f85149';
-  if (h.ports.some(p => p.classification === 'interesting'))   return '#d98634';
+function hostColor(h){
+  if(h.vulns&&h.vulns.filter(v=>v.severity!=='INFO').length)return '#e07a30';
+  if(h.ports.some(p=>p.classification==='critical'))return '#7c3aed';
+  if(h.ports.some(p=>p.classification==='interesting'))return '#f85149';
   return '#3fb950';
 }
-
-function updateStats() {
-  const tp = scanData.hosts.reduce((s,h) => s + h.ports.length, 0);
-  const tc = scanData.hosts.reduce((s,h) => s + h.ports.filter(p=>p.classification==='critical').length, 0);
-  const ti = scanData.hosts.reduce((s,h) => s + h.ports.filter(p=>p.classification==='interesting').length, 0);
-  const tv = scanData.hosts.reduce((s,h) => s + h.vulns.length, 0);
-  document.getElementById('s-hosts').textContent = scanData.hosts.length;
-  document.getElementById('s-ports').textContent = tp;
-  document.getElementById('s-crit').textContent  = tc;
-  document.getElementById('s-inter').textContent = ti;
-  document.getElementById('s-vulns').textContent = tv;
-  const args = scanData.args || '';
-  document.getElementById('s-args').textContent = args ? 'cmd: ' + args.substring(0, 80) : '';
+function updateStats(){
+  const tp=scanData.hosts.reduce((s,h)=>s+h.ports.length,0);
+  const tc=scanData.hosts.reduce((s,h)=>s+h.ports.filter(p=>p.classification==='critical').length,0);
+  const ti=scanData.hosts.reduce((s,h)=>s+h.ports.filter(p=>p.classification==='interesting').length,0);
+  const tv=scanData.hosts.reduce((s,h)=>s+h.vulns.filter(v=>v.severity!=='INFO').length,0);
+  document.getElementById('s-hosts').textContent=scanData.hosts.length;
+  document.getElementById('s-ports').textContent=tp;
+  document.getElementById('s-crit').textContent=tc;
+  document.getElementById('s-inter').textContent=ti;
+  document.getElementById('s-vulns').textContent=tv;
+  const ov=document.getElementById('scan-info-overlay');
+  ov.style.display='block';
+  document.getElementById('scan-info-text').textContent=`${scanData.hosts.length} host(s) . ${tp} open ports . ${tc} critical . ${tv} findings`;
+  document.getElementById('scan-info-cmd').textContent=scanData.args?'> '+scanData.args.substring(0,100):'';
 }
-
-function renderBadges() {
-  const c = document.getElementById('scan-badges'); c.innerHTML = '';
-  const v = document.createElement('span');
-  v.className = 'badge ' + (scanData.has_version ? 'bv' : 'bb');
-  v.textContent = scanData.has_version ? '✓ Version Scan (-sV)' : '⚠ Basic Scan (no -sV)';
+function renderBadges(){
+  const c=document.getElementById('scan-badges');c.innerHTML='';
+  const v=document.createElement('span');
+  v.className='badge '+(scanData.has_version?'bv':'bb');
+  v.textContent=scanData.has_version?'Version Scan (-sV)':'Basic Scan (no -sV)';
   c.appendChild(v);
-  if (scanData.has_scripts) {
-    const s = document.createElement('span'); s.className = 'badge bs';
-    s.textContent = '✓ NSE Scripts'; c.appendChild(s);
-  }
-  if (scanData.hosts.length > 20) {
-    const m = document.createElement('span'); m.className = 'badge bm';
-    m.textContent = '⬡ Subnet clustering active'; c.appendChild(m);
-  }
+  if(scanData.has_scripts){const s=document.createElement('span');s.className='badge bs';s.textContent='NSE Scripts';c.appendChild(s)}
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// HOST LIST
-// ─────────────────────────────────────────────────────────────────────────────
-function renderHostList() {
-  const list = document.getElementById('host-list'); list.innerHTML = '';
-  if (!scanData.hosts.length) {
-    list.innerHTML = '<p class="empty-state">No active hosts found in scan</p>'; return;
-  }
-  scanData.hosts.forEach((h, i) => {
-    const div = document.createElement('div');
-    div.className = 'host-item'; div.id = 'hi-' + i;
-    const c = h.ports.filter(p => p.classification==='critical').length;
-    const n = h.ports.filter(p => p.classification==='interesting').length;
-    const r = h.ports.filter(p => p.classification==='normal').length;
-    div.innerHTML = `
-      <div class="host-ip">${h.ip || '?'}</div>
-      <div class="host-meta">${h.hostname ? h.hostname + ' · ' : ''}${h.os ? h.os.substring(0,36) : 'OS unknown'}${h.os_accuracy ? ' (' + h.os_accuracy + '%)' : ''}</div>
-      ${h.mac ? `<div class="host-meta">MAC: ${h.mac}${h.vendor ? ' (' + h.vendor + ')' : ''}</div>` : ''}
+// ── UPLOAD HISTORY ────────────────────────────────────────────────────────
+function loadUploadHistory(){
+  fetch('/api/history').then(r=>r.json()).then(items=>{
+    const wrap=document.getElementById('upload-hist-wrap');
+    const list=document.getElementById('upload-hist-list');
+    const cnt=document.getElementById('upload-hist-count');
+    if(!items.length){wrap.style.display='none';return}
+    wrap.style.display='block';
+    cnt.textContent='('+items.length+')';
+    list.innerHTML='';
+    items.slice(0,6).forEach(item=>{
+      const fn=(item.filenames||[]).join(', ');
+      const div=document.createElement('div');
+      div.className='upload-hist-item';
+      div.innerHTML=`
+        <span class="uhi-ts">${item.timestamp_display}</span>
+        <span class="uhi-info" title="${esc(fn)}">${esc(fn)}</span>
+        <span class="uhi-badges">
+          <span class="uhi-badge" style="border-color:rgba(77,157,224,.4);color:var(--accent)">${item.host_count}H</span>
+          ${item.critical_ports?`<span class="uhi-badge" style="border-color:rgba(124,58,237,.4);color:var(--sc)">${item.critical_ports}C</span>`:''}
+          ${item.vuln_count?`<span class="uhi-badge" style="border-color:rgba(224,122,48,.4);color:var(--sm)">${item.vuln_count}V</span>`:''}
+        </span>`;
+      div.onclick=()=>loadHistoryScan(item.id);
+      list.appendChild(div);
+    });
+    if(items.length>6){
+      const more=document.createElement('div');
+      more.style.cssText='text-align:center;padding:8px;font-size:12px;color:var(--muted);cursor:pointer';
+      more.textContent='View all '+items.length+' scans...';
+      more.onclick=openHistory;
+      list.appendChild(more);
+    }
+  }).catch(()=>{});
+}
+
+// ── HOST LIST ─────────────────────────────────────────────────────────────
+function renderHostList(){
+  const list=document.getElementById('host-list');list.innerHTML='';
+  if(!scanData.hosts.length){list.innerHTML='<p class="empty-state">No active hosts found in scan</p>';return}
+  scanData.hosts.forEach((h,i)=>{
+    const div=document.createElement('div');div.className='host-item';div.id='hi-'+i;
+    const c=h.ports.filter(p=>p.classification==='critical').length;
+    const n=h.ports.filter(p=>p.classification==='interesting').length;
+    const r=h.ports.filter(p=>p.classification==='normal').length;
+    const rv=h.vulns.filter(v=>v.severity!=='INFO').length;
+    const iv=h.vulns.filter(v=>v.severity==='INFO').length;
+    div.innerHTML=`
+      <div class="host-ip">${h.ip||'?'}</div>
+      <div class="host-meta">${h.hostname?h.hostname+' &middot; ':''}${h.os?h.os.substring(0,36):'OS unknown'}${h.os_accuracy?' ('+h.os_accuracy+'%)':''}</div>
+      ${h.mac?`<div class="host-meta">MAC: ${h.mac}${h.vendor?' &middot; '+h.vendor:''}</div>`:''}
       <div class="host-badges">
-        ${c ? `<span class="pill pill-c">🔴 ${c} critical</span>` : ''}
-        ${n ? `<span class="pill pill-i">🟠 ${n} interesting</span>` : ''}
-        ${r ? `<span class="pill pill-n">🟢 ${r} ports</span>` : ''}
-        ${h.vulns.length ? `<span class="pill pill-v">⚠ ${h.vulns.length} vulns</span>` : ''}
+        ${c?`<span class="pill pill-c">&#x1f7e3; ${c} critical</span>`:''}
+        ${n?`<span class="pill pill-i">&#x1f534; ${n} interesting</span>`:''}
+        ${r?`<span class="pill pill-n">&#x1f7e2; ${r} ports</span>`:''}
+        ${rv?`<span class="pill pill-v">&#x26a0;&#xfe0f; ${rv} vulns</span>`:''}
+        ${iv?`<span class="pill" style="border-color:rgba(77,157,224,.3);color:var(--si)">&#x2139;&#xfe0f; ${iv} info</span>`:''}
       </div>`;
-    div.onclick = () => selectHost(i);
+    div.onclick=()=>selectHost(i);
     list.appendChild(div);
   });
 }
-
-function selectHost(idx) {
-  selectedHost = idx;
-  document.querySelectorAll('.host-item').forEach(e => e.classList.remove('selected'));
-  const el = document.getElementById('hi-' + idx);
-  if (el) el.classList.add('selected');
-  // Select in graph (handle clusters)
-  if (network) {
-    const nodeId = idx + 1;
-    if (network.findNode(nodeId).length > 0) network.selectNodes([nodeId]);
-  }
+function selectHost(idx){
+  selectedHost=idx;
+  document.querySelectorAll('.host-item').forEach(e=>e.classList.remove('selected'));
+  const el=document.getElementById('hi-'+idx);
+  if(el){el.classList.add('selected');el.scrollIntoView({block:'nearest'})}
+  if(network){try{if(network.findNode(idx+1).length>0)network.selectNodes([idx+1])}catch(e){}}
   renderPortDetail(scanData.hosts[idx]);
   renderVulnDetail(scanData.hosts[idx]);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// PORT DETAIL
-// ─────────────────────────────────────────────────────────────────────────────
-function renderPortDetail(h) {
+// ── PORT DETAIL ───────────────────────────────────────────────────────────
+function renderPortDetail(h){
   switchTab('ports');
-  const panel = document.getElementById('detail-panel');
-  if (!h.ports.length) {
-    panel.innerHTML = `<h3>${h.ip}</h3><p class="empty-state">No open ports detected</p>`; return;
-  }
-  const sorted = [...h.ports].sort((a,b) => {
-    const o = {critical:0,interesting:1,normal:2};
-    return (o[a.classification]||2)-(o[b.classification]||2)||a.portid-b.portid;
-  });
-  let html = `<h3>${h.ip} — ${h.ports.length} open port(s)</h3>`;
-  if (!scanData.has_version)
-    html += `<div class="scan-notice">⚠ Basic scan detected — no version info. Run <code>nmap -sV</code> for more detail.</div>`;
-  sorted.forEach(p => {
-    const s   = p.service || {};
-    const ver = [s.product, s.version, s.extrainfo].filter(Boolean).join(' ');
-    html += `<div class="port-row ${p.classification}">
+  const panel=document.getElementById('detail-panel');
+  if(!h.ports.length){panel.innerHTML=`<h3>${h.ip}</h3><p class="empty-state">No open ports detected</p>`;return}
+  const sorted=[...h.ports].sort((a,b)=>{const o={critical:0,interesting:1,normal:2};return(o[a.classification]||2)-(o[b.classification]||2)||a.portid-b.portid});
+  let html=`<h3>${h.ip} . ${h.ports.length} open port(s)</h3>`;
+  if(!scanData.has_version)html+=`<div class="scan-notice">Basic scan: no version info. Run with <code>-sV</code> for full analysis.</div>`;
+  sorted.forEach(p=>{
+    const s=p.service||{};
+    const ver=[s.product,s.version,s.extrainfo].filter(Boolean).join(' ');
+    html+=`<div class="port-row ${p.classification}">
       <div class="port-header">
         <span class="port-num">${p.portid}/${p.protocol}</span>
-        <span>${s.name || '?'}${p.classification==='critical' ? ' 🔴' : p.classification==='interesting' ? ' 🟠' : ''}</span>
+        <span class="port-name">${s.name||'?'}${p.classification==='critical'?' &#x1f7e3;':p.classification==='interesting'?' &#x1f534;':''}</span>
       </div>
-      ${ver ? `<div class="port-ver">${esc(ver)}</div>` : (!scanData.has_version ? '<div class="port-ver" style="color:#d29922">Version unknown (no -sV)</div>' : '')}
-      ${p.classification==='critical' ? `<div class="port-crit">⛔ ${esc(p.class_reason)}</div>` : ''}
-      ${p.classification==='interesting' ? `<div class="port-warn">⚠ ${esc(p.class_reason)}</div>` : ''}
-      ${p.scripts.map(sc => `<div class="script-block"><div class="script-id">${esc(sc.id)}</div><div class="script-output">${esc(sc.output)}</div></div>`).join('')}
+      ${ver?`<div class="port-ver">${esc(ver)}</div>`:(!scanData.has_version?'<div class="port-ver" style="color:var(--yellow)">Version unknown (no -sV)</div>':'')}
+      ${p.classification==='critical'?`<div class="port-crit">&#x26d4; ${esc(p.class_reason)}</div>`:''}
+      ${p.classification==='interesting'?`<div class="port-warn">&#x26a0;&#xfe0f; ${esc(p.class_reason)}</div>`:''}
+      ${p.scripts.map(sc=>`<div class="script-block"><div class="script-id">${esc(sc.id)}</div><div class="script-output">${esc(sc.output)}</div></div>`).join('')}
     </div>`;
   });
-  panel.innerHTML = html;
+  panel.innerHTML=html;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// VULN DETAIL
-// ─────────────────────────────────────────────────────────────────────────────
-function renderVulnDetail(h) {
-  const panel = document.getElementById('vuln-panel');
-  if (!h.vulns.length) {
-    panel.innerHTML = `<div class="no-vulns">✅ No vulnerabilities detected on ${h.ip}<br>
-      <small style="color:var(--muted);display:block;margin-top:8px">Run with -sV and --script vuln for full detection coverage</small></div>`; return;
+// ── VULN DETAIL ───────────────────────────────────────────────────────────
+function renderVulnDetail(h){
+  const panel=document.getElementById('vuln-panel');
+  const real=h.vulns.filter(v=>v.severity!=='INFO');
+  const info=h.vulns.filter(v=>v.severity==='INFO');
+  if(!h.vulns.length){
+    panel.innerHTML=`<div class="no-vulns">No findings on ${h.ip}<br><small style="color:var(--muted);display:block;margin-top:8px;font-size:12px">Run with -sV and --script vuln for full coverage</small></div>`;
+    return;
   }
-  const order = {CRITICAL:0,HIGH:1,MEDIUM:2,LOW:3};
-  const sorted = [...h.vulns].sort((a,b) => (order[a.severity]||9)-(order[b.severity]||9));
-  let html = `<div style="font-size:12px;color:var(--muted);margin-bottom:10px">${sorted.length} potential vulnerability(ies) on ${h.ip}</div>`;
-  sorted.forEach(v => {
-    html += `<div class="vuln-card vuln-${v.severity}">
+  const order={CRITICAL:0,HIGH:1,MEDIUM:2,LOW:3,INFO:4};
+  const sorted=[...h.vulns].sort((a,b)=>(order[a.severity]||9)-(order[b.severity]||9));
+  let html=`<div style="font-size:12px;color:var(--muted);margin-bottom:10px">${real.length} finding(s) + ${info.length} info on ${h.ip}</div>`;
+  sorted.forEach(v=>{
+    html+=`<div class="vuln-card vuln-${v.severity}">
       <div class="vuln-header"><span class="sev-badge sev-${v.severity}">${v.severity}</span><span class="vuln-title">${esc(v.title)}</span></div>
       <div class="vuln-desc">${esc(v.description)}</div>
       <div class="vuln-meta">
-        ${v.cve !== 'N/A' ? `<span class="vuln-cve">📋 ${esc(v.cve)}</span>` : ''}
+        ${v.cve!=='N/A'?`<span class="vuln-cve">CVE: ${esc(v.cve)}</span>`:''}
         <span class="vuln-port">Port ${v.port}</span>
-        <span style="color:var(--border)">·</span>
-        <span style="color:var(--muted)">${esc(v.script)}</span>
+        <span style="color:var(--dim)">${esc(v.script)}</span>
       </div>
+      ${v.followup?`<div class="vuln-followup"><div class="fu-label">Recommended follow-up scan</div><code onclick="copyCmd(this)" title="Click to copy">${esc(v.followup)}</code></div>`:''}
     </div>`;
   });
-  panel.innerHTML = html;
+  panel.innerHTML=html;
+}
+function copyCmd(el){
+  navigator.clipboard.writeText(el.textContent).then(()=>showToast('Command copied to clipboard'));
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// GRAPH — WITH SUBNET CLUSTERING
-// ─────────────────────────────────────────────────────────────────────────────
-function getSubnet(ip) {
-  const parts = (ip || '0.0.0.0').split('.');
-  return parts.slice(0, 3).join('.');
+// ── DRILL-DOWN MODAL ──────────────────────────────────────────────────────
+function openDrill(mode){
+  if(!scanData)return;
+  drillMode=mode;drillFilter='all';
+  const modal=document.getElementById('drill-modal');
+  modal.classList.add('open');
+  buildDrill();
 }
+function closeDrill(){document.getElementById('drill-modal').classList.remove('open')}
 
-function renderGraph() {
-  const nodes = [], edges = [];
+function buildDrill(){
+  const titles={all:'All Hosts',ports:'All Open Ports',critical:'Critical Ports',interesting:'Interesting Ports',vulns:'Vulnerability Findings'};
+  document.getElementById('drill-title').textContent=titles[drillMode]||'Details';
+  const thead=document.getElementById('drill-thead');
+  const tbody=document.getElementById('drill-tbody');
+  const filterBar=document.getElementById('drill-filter-bar');
+  filterBar.innerHTML='';tbody.innerHTML='';
 
-  // Scanner node (id = 0)
-  nodes.push({
-    id: 0,
-    label: '🔍 Scanner\n' + (scanData.args || 'nmap').substring(0, 40),
-    color: { background: '#1f6feb', border: '#58a6ff', highlight: { background: '#2a7de1', border: '#79c0ff' }},
-    font: { color: '#e6edf3', size: 12 },
-    shape: 'ellipse', size: 30, shadow: true,
-  });
-
-  // Build host nodes (id = hostIndex + 1)
-  scanData.hosts.forEach((h, i) => {
-    const col = hostColor(h);
-    const c   = h.ports.filter(p => p.classification==='critical').length;
-    const n   = h.ports.filter(p => p.classification==='interesting').length;
-    const lbl = [
-      h.ip || '?',
-      h.hostname ? h.hostname.substring(0,24) : '',
-      h.os ? h.os.substring(0,26) : '',
-      h.ports.length + ' port' + (h.ports.length !== 1 ? 's' : ''),
-      c ? '🔴 ' + c + ' critical' : '',
-      n ? '🟠 ' + n + ' interesting' : '',
-      h.vulns.length ? '⚠ ' + h.vulns.length + ' vulns' : '',
-    ].filter(Boolean).join('\n');
-
-    nodes.push({
-      id: i + 1, label: lbl,
-      hostIndex: i,
-      subnet: getSubnet(h.ip),
-      color: { background: col + '28', border: col, highlight: { background: col + '50', border: col }},
-      font: { color: '#e6edf3', size: 11 },
-      shape: 'box', borderWidth: 2, shadow: true,
+  if(drillMode==='all'){
+    thead.innerHTML='<tr><th>IP Address</th><th>Hostname</th><th>OS</th><th>Open Ports</th><th>Critical</th><th>Interesting</th><th>Findings</th></tr>';
+    drillData=scanData.hosts;
+    drillData.forEach(h=>{
+      const c=h.ports.filter(p=>p.classification==='critical').length;
+      const n=h.ports.filter(p=>p.classification==='interesting').length;
+      const v=h.vulns.filter(x=>x.severity!=='INFO').length;
+      const tr=document.createElement('tr');
+      tr.innerHTML=`<td class="drill-ip">${esc(h.ip)}</td><td style="color:var(--muted)">${esc(h.hostname)}</td><td style="color:var(--muted);font-size:12px">${esc((h.os||'').substring(0,30))}</td><td>${h.ports.length}</td>
+        <td style="color:var(--sc);font-weight:700">${c||''}</td>
+        <td style="color:var(--sh);font-weight:700">${n||''}</td>
+        <td style="color:var(--sm);font-weight:700">${v||''}</td>`;
+      tbody.appendChild(tr);
     });
-    edges.push({ from: 0, to: i + 1, color: { color: col + '70', highlight: col }, width: 1.5 });
-  });
-
-  const container = document.getElementById('graph');
-  nodesDS = new vis.DataSet(nodes);
-  edgesDS = new vis.DataSet(edges);
-
-  const options = {
-    physics: {
-      enabled: true,
-      stabilization: { iterations: 120, updateInterval: 25 },
-      barnesHut: { gravitationalConstant: -6000, springLength: 160, springConstant: 0.04 },
-    },
-    interaction: { hover: true, tooltipDelay: 150, multiselect: false },
-    edges: { smooth: { type: 'dynamic' } },
-    nodes: { margin: 8 },
-  };
-
-  network = new vis.Network(container, { nodes: nodesDS, edges: edgesDS }, options);
-
-  network.on('click', params => {
-    if (params.nodes.length > 0) {
-      const nodeId = params.nodes[0];
-      if (typeof nodeId === 'number' && nodeId > 0) {
-        const nodeData = nodesDS.get(nodeId);
-        if (nodeData && nodeData.hostIndex !== undefined) selectHost(nodeData.hostIndex);
-      }
-    }
-  });
-
-  network.on('doubleClick', params => {
-    if (params.nodes.length > 0 && network.isCluster(params.nodes[0])) {
-      network.openCluster(params.nodes[0]);
-      if (!hasAnyClusters()) { clustered = false; document.getElementById('cluster-btn').textContent = '⬡ Cluster'; }
-    }
-  });
-
-  // Auto-cluster if many hosts
-  network.once('stabilized', () => {
-    if (scanData.hosts.length >= 8) {
-      applySubnetClustering();
-    }
-  });
-}
-
-function applySubnetClustering() {
-  // Group hosts by /24 subnet
-  const subnets = {};
-  scanData.hosts.forEach((h, i) => {
-    const s = getSubnet(h.ip);
-    if (!subnets[s]) subnets[s] = [];
-    subnets[s].push(i + 1); // node IDs
-  });
-
-  let clusterCount = 0;
-  Object.entries(subnets).forEach(([subnet, nodeIds]) => {
-    if (nodeIds.length < 2) return; // only cluster subnets with 2+ hosts
-    const critCount = nodeIds.filter(id => {
-      const h = scanData.hosts[id - 1];
-      return h && h.ports.some(p => p.classification === 'critical');
-    }).length;
-    const vulnCount = nodeIds.filter(id => {
-      const h = scanData.hosts[id - 1];
-      return h && h.vulns && h.vulns.length > 0;
-    }).length;
-
-    const borderCol = critCount > 0 ? '#f85149' : vulnCount > 0 ? '#bc8cff' : '#58a6ff';
-    const bgCol     = critCount > 0 ? '#f8514920' : vulnCount > 0 ? '#bc8cff20' : '#58a6ff20';
-
-    network.cluster({
-      joinCondition: nodeOptions => nodeIds.includes(nodeOptions.id),
-      clusterNodeProperties: {
-        id: 'cluster_' + subnet,
-        label: `📡 ${subnet}.0/24\n${nodeIds.length} hosts${critCount ? '\n🔴 ' + critCount + ' critical' : ''}${vulnCount ? '\n⚠ ' + vulnCount + ' vulns' : ''}`,
-        color: { background: bgCol, border: borderCol, highlight: { background: bgCol, border: borderCol }},
-        font: { color: '#e6edf3', size: 12 },
-        shape: 'ellipse', size: 28 + nodeIds.length * 2, borderWidth: 2, shadow: true,
-        title: `Subnet ${subnet}.0/24 — ${nodeIds.length} hosts. Double-click to expand.`,
-      },
-      clusterEdgeProperties: { color: { color: borderCol + '88' }, width: 2 }
+  } else if(drillMode==='ports'||drillMode==='critical'||drillMode==='interesting'){
+    thead.innerHTML='<tr><th>Host IP</th><th>Port</th><th>Protocol</th><th>Service</th><th>Version</th><th>Classification</th><th>Note</th></tr>';
+    const filters=['all','critical','interesting','normal'];
+    filters.forEach(f=>{
+      const btn=document.createElement('button');
+      btn.className='drill-filter'+(f===drillFilter?' active':'');
+      btn.textContent={all:'All',critical:'Critical',interesting:'Interesting',normal:'Normal'}[f];
+      btn.onclick=()=>{drillFilter=f;document.querySelectorAll('.drill-filter').forEach(b=>b.classList.remove('active'));btn.classList.add('active');renderDrillPorts()};
+      filterBar.appendChild(btn);
     });
-    clusterCount++;
-  });
-
-  if (clusterCount > 0) {
-    clustered = true;
-    document.getElementById('cluster-btn').textContent = '⊞ Expand All';
+    if(drillMode==='critical')drillFilter='critical';
+    if(drillMode==='interesting')drillFilter='interesting';
+    document.querySelectorAll('.drill-filter').forEach(b=>{b.classList.toggle('active',b.textContent.toLowerCase()===drillFilter||( drillFilter==='all'&&b.textContent==='All'))});
+    renderDrillPorts();
+    return;
+  } else if(drillMode==='vulns'){
+    thead.innerHTML='<tr><th>Host IP</th><th>Severity</th><th>Title</th><th>CVE</th><th>Port</th><th>Description</th></tr>';
+    const sevs=['all','CRITICAL','HIGH','MEDIUM','LOW','INFO'];
+    sevs.forEach(f=>{
+      const btn=document.createElement('button');
+      btn.className='drill-filter'+(f==='all'?' active':'');
+      btn.textContent=f==='all'?'All':f;
+      if(f!=='all')btn.style.color='var(--s'+f.toLowerCase().charAt(0)+')';
+      btn.onclick=()=>{drillFilter=f;document.querySelectorAll('.drill-filter').forEach(b=>b.classList.remove('active'));btn.classList.add('active');renderDrillVulns()};
+      filterBar.appendChild(btn);
+    });
+    renderDrillVulns();
+    return;
   }
 }
 
-function toggleClustering() {
-  if (!network || !scanData) return;
-  if (!clustered) {
-    applySubnetClustering();
+function renderDrillPorts(){
+  const tbody=document.getElementById('drill-tbody');tbody.innerHTML='';
+  drillData=[];
+  scanData.hosts.forEach(h=>{
+    h.ports.forEach(p=>{
+      if(drillFilter==='all'||p.classification===drillFilter){
+        drillData.push({host:h.ip,port:p.portid,proto:p.protocol,svc:(p.service||{}).name||'',ver:[((p.service||{}).product||''),((p.service||{}).version||'')].filter(Boolean).join(' '),cls:p.classification,reason:p.class_reason||''});
+      }
+    });
+  });
+  drillData.sort((a,b)=>{const o={critical:0,interesting:1,normal:2};return(o[a.cls]||2)-(o[b.cls]||2)||a.port-b.port});
+  drillData.forEach(row=>{
+    const clsColor={critical:'var(--sc)',interesting:'var(--sh)',normal:'var(--green)'}[row.cls]||'var(--muted)';
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td class="drill-ip">${esc(row.host)}</td><td class="drill-port" style="color:var(--accent)">${row.port}</td><td style="color:var(--muted)">${row.proto}</td><td>${esc(row.svc)}</td><td style="color:var(--muted);font-family:var(--font-mono);font-size:12px">${esc(row.ver)}</td>
+      <td><span class="drill-sev" style="color:${clsColor}">${row.cls.toUpperCase()}</span></td><td class="drill-reason">${esc(row.reason)}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function renderDrillVulns(){
+  const tbody=document.getElementById('drill-tbody');tbody.innerHTML='';
+  drillData=[];
+  const order={CRITICAL:0,HIGH:1,MEDIUM:2,LOW:3,INFO:4};
+  scanData.hosts.forEach(h=>{
+    h.vulns.forEach(v=>{
+      if(drillFilter==='all'||v.severity===drillFilter)
+        drillData.push({host:h.ip,...v});
+    });
+  });
+  drillData.sort((a,b)=>(order[a.severity]||9)-(order[b.severity]||9));
+  drillData.forEach(row=>{
+    const sc={CRITICAL:'var(--sc)',HIGH:'var(--sh)',MEDIUM:'var(--sm)',LOW:'var(--sl)',INFO:'var(--si)'}[row.severity]||'var(--muted)';
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td class="drill-ip">${esc(row.host)}</td><td><span class="drill-sev" style="color:${sc}">${row.severity}</span></td><td style="font-weight:600">${esc(row.title)}</td>
+      <td style="color:var(--purple);font-size:12px">${esc(row.cve||'N/A')}</td><td style="color:var(--accent)">${row.port}</td><td class="drill-reason">${esc(row.description)}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function exportDrill(fmt){
+  if(!drillData.length){showToast('No data to export');return}
+  let content,filename,mime;
+  if(fmt==='json'){
+    content=JSON.stringify(drillData,null,2);
+    filename=`nmapviz_${drillMode}.json`;mime='application/json';
   } else {
-    expandAllClusters();
-    clustered = false;
-    document.getElementById('cluster-btn').textContent = '⬡ Cluster';
+    const keys=Object.keys(drillData[0]);
+    const rows=[keys.join(','),...drillData.map(r=>keys.map(k=>{const v=String(r[k]||'').replace(/"/g,'""');return v.includes(',')||v.includes('"')||v.includes('\n')?`"${v}"`:v}).join(','))];
+    content=rows.join('\n');
+    filename=`nmapviz_${drillMode}.csv`;mime='text/csv';
   }
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([content],{type:mime}));
+  a.download=filename;a.click();
+  showToast('Exported '+filename);
 }
 
-function expandAllClusters() {
-  // Keep expanding until no clusters left
-  let safety = 20;
-  while (hasAnyClusters() && safety-- > 0) {
-    network.getNodeIds().forEach(id => {
-      if (network.isCluster(id)) network.openCluster(id);
+// ── SIDEBAR RESIZE ────────────────────────────────────────────────────────
+(function(){
+  const handle=document.getElementById('sidebar-resize');
+  const sidebar=document.getElementById('sidebar');
+  let dragging=false,startX=0,startW=0;
+  handle.addEventListener('mousedown',e=>{
+    dragging=true;startX=e.clientX;startW=sidebar.offsetWidth;
+    handle.classList.add('dragging');document.body.style.cursor='col-resize';e.preventDefault();
+  });
+  document.addEventListener('mousemove',e=>{
+    if(!dragging)return;
+    const w=Math.max(200,Math.min(600,startW+(e.clientX-startX)));
+    sidebar.style.width=w+'px';
+    document.documentElement.style.setProperty('--sidebar-w',w+'px');
+  });
+  document.addEventListener('mouseup',()=>{
+    dragging=false;handle.classList.remove('dragging');document.body.style.cursor='';
+  });
+})();
+
+// ── GRAPH ─────────────────────────────────────────────────────────────────
+function detectClusterLevel(hosts){
+  const ips=hosts.map(h=>h.ip||'0.0.0.0');
+  const o0=new Set(ips.map(ip=>ip.split('.')[0]));
+  const o1=new Set(ips.map(ip=>ip.split('.').slice(0,2).join('.')));
+  if(o0.size>1)return 2;if(o1.size>1)return 3;return 3;
+}
+function getSubnetKey(ip,level){return(ip||'0.0.0.0').split('.').slice(0,level).join('.')}
+
+function renderGraph(){
+  const nodes=[],edges=[];
+  nodes.push({id:0,label:'Scanner\n'+(scanData.args||'nmap').substring(0,38),color:{background:'#1f3a52',border:'#4d9de0',highlight:{background:'#1f4a6e',border:'#6db3ee'}},font:{color:'#cdd9e5',size:12,face:'Inter'},shape:'ellipse',size:28,shadow:true});
+  scanData.hosts.forEach((h,i)=>{
+    const col=hostColor(h);
+    const c=h.ports.filter(p=>p.classification==='critical').length;
+    const n=h.ports.filter(p=>p.classification==='interesting').length;
+    const rv=h.vulns.filter(v=>v.severity!=='INFO').length;
+    const lbl=[h.ip||'?',h.hostname?h.hostname.substring(0,24):'',h.os?h.os.substring(0,26):'',h.ports.length+' port(s)',c?c+' critical':'',n?n+' interesting':'',rv?rv+' finding(s)':''].filter(Boolean).join('\n');
+    nodes.push({id:i+1,label:lbl,hostIndex:i,subnet2:getSubnetKey(h.ip,2),subnet3:getSubnetKey(h.ip,3),color:{background:col+'1a',border:col,highlight:{background:col+'35',border:col}},font:{color:'#cdd9e5',size:12,face:'Inter'},shape:'box',borderWidth:2,shadow:true});
+    edges.push({from:0,to:i+1,color:{color:col+'55',highlight:col},width:1.5});
+  });
+  const container=document.getElementById('graph');
+  nodesDS=new vis.DataSet(nodes);edgesDS=new vis.DataSet(edges);
+  const options={physics:{enabled:true,stabilization:{iterations:120,updateInterval:25},barnesHut:{gravitationalConstant:-6000,springLength:160,springConstant:.04,damping:.15}},interaction:{hover:true,tooltipDelay:200},edges:{smooth:{type:'dynamic'}},nodes:{margin:8}};
+  network=new vis.Network(container,{nodes:nodesDS,edges:edgesDS},options);
+  network.on('click',params=>{if(params.nodes.length>0){const nd=nodesDS.get(params.nodes[0]);if(nd&&nd.hostIndex!==undefined)selectHost(nd.hostIndex)}});
+  network.on('doubleClick',params=>{if(params.nodes.length>0&&network.isCluster(params.nodes[0])){network.openCluster(params.nodes[0]);if(!hasAnyClusters()){clustered=false;document.getElementById('cluster-btn').textContent='⬡ Cluster'}}});
+  network.once('stabilized',()=>{if(scanData.hosts.length>=6)applySubnetClustering()});
+}
+function applySubnetClustering(){
+  const level=detectClusterLevel(scanData.hosts),mask=level===2?'/16':'/24';
+  const subnets={};
+  scanData.hosts.forEach((h,i)=>{const k=getSubnetKey(h.ip,level);if(!subnets[k])subnets[k]=[];subnets[k].push(i+1)});
+  let count=0;
+  Object.entries(subnets).forEach(([subnet,nodeIds])=>{
+    if(nodeIds.length<2)return;
+    const hCrit=nodeIds.filter(id=>scanData.hosts[id-1]?.ports.some(p=>p.classification==='critical')).length;
+    const hVuln=nodeIds.filter(id=>scanData.hosts[id-1]?.vulns.filter(v=>v.severity!=='INFO').length>0).length;
+    const bCol=hCrit>0?'#7c3aed':hVuln>0?'#e07a30':'#4d9de0';
+    network.cluster({joinCondition:nd=>nodeIds.includes(nd.id),clusterNodeProperties:{id:'cluster_'+subnet,label:`${subnet}.x${mask}\n${nodeIds.length} hosts${hCrit?'\n'+hCrit+' critical':''}${hVuln?'\n'+hVuln+' vulns':''}`,color:{background:bCol+'1a',border:bCol,highlight:{background:bCol+'33',border:bCol}},font:{color:'#cdd9e5',size:13,face:'Inter'},shape:'ellipse',size:28+nodeIds.length*2,borderWidth:2,shadow:true,title:`Subnet ${subnet}.x${mask} . ${nodeIds.length} hosts. Double-click to expand.`},clusterEdgeProperties:{color:{color:bCol+'66'},width:1.5}});
+    count++;
+  });
+  if(count>0){clustered=true;document.getElementById('cluster-btn').textContent='⊞ Expand'}
+}
+function toggleClustering(){
+  if(!network||!scanData)return;
+  if(!clustered)applySubnetClustering();
+  else { network.cluster({ joinCondition: () => false }); document.getElementById('cluster-btn').textContent = '⬡ Cluster'; } 
+}
+function hasAnyClusters(){try{return network.getNodeIds().some(id=>network.isCluster(id))}catch(e){return false}}
+function togglePhysics(){physicsOn=!physicsOn;network&&network.setOptions({physics:{enabled:physicsOn}})}
+
+// ── HISTORY ───────────────────────────────────────────────────────────────
+function openHistory(){loadHistoryList();document.getElementById('history-panel').classList.add('open')}
+function closeHistory(){document.getElementById('history-panel').classList.remove('open')}
+function loadHistoryList(){
+  const list=document.getElementById('history-list');
+  list.innerHTML='<p style="color:var(--muted);font-size:13px;text-align:center;padding:16px">Loading...</p>';
+  fetch('/api/history').then(r=>r.json()).then(items=>{
+    if(!items.length){list.innerHTML='<p class="empty-state">No saved scans yet</p>';return}
+    list.innerHTML='';
+    items.forEach(item=>{
+      const div=document.createElement('div');
+      div.className='history-item'+(item.id===currentScanId?' active-scan':'');
+      const fn=(item.filenames||[]).join(', ');
+      div.innerHTML=`
+        <div class="hi-top"><span class="hi-ts">${item.timestamp_display}</span>${item.id===currentScanId?'<span class="badge bs" style="font-size:10px">active</span>':''}</div>
+        <div class="hi-files" title="${esc(fn)}">&#x1f4c1; ${esc(fn)}</div>
+        <div class="hi-stats">
+          <span class="hi-stat">&#x1f5a5; ${item.host_count} hosts</span>
+          <span class="hi-stat">&#x1f50c; ${item.total_ports} ports</span>
+          ${item.critical_ports?`<span class="hi-stat" style="color:var(--sc)">&#x1f7e3; ${item.critical_ports} critical</span>`:''}
+          ${item.vuln_count?`<span class="hi-stat" style="color:var(--sm)">&#x26a0;&#xfe0f; ${item.vuln_count} vulns</span>`:''}
+        </div>
+        <div class="hi-actions">
+          <button class="hi-btn hi-btn-load" onclick="loadHistoryScan('${item.id}')">Load</button>
+          <button class="hi-btn" onclick="dlReport('${item.id}','json')">JSON</button>
+          <button class="hi-btn" onclick="dlReport('${item.id}','html')">HTML</button>
+          <button class="hi-btn" onclick="dlReport('${item.id}','markdown')">MD</button>
+          <button class="hi-btn" onclick="dlReport('${item.id}','pdf')" style="color:var(--sc)">PDF</button>
+          <button class="hi-btn hi-btn-del" onclick="deleteHistoryScan('${item.id}',this)">Delete</button>
+        </div>`;
+      list.appendChild(div);
     });
-  }
+  }).catch(()=>{list.innerHTML='<p class="empty-state">Failed to load history</p>'});
 }
-
-function hasAnyClusters() {
-  return network.getNodeIds().some(id => network.isCluster(id));
-}
-
-function togglePhysics() {
-  physicsOn = !physicsOn;
-  network && network.setOptions({ physics: { enabled: physicsOn }});
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// HISTORY
-// ─────────────────────────────────────────────────────────────────────────────
-function openHistory() {
-  loadHistoryList();
-  document.getElementById('history-panel').classList.add('open');
-}
-function closeHistory() {
-  document.getElementById('history-panel').classList.remove('open');
-}
-
-function loadHistoryList() {
-  const list = document.getElementById('history-list');
-  list.innerHTML = '<p style="color:var(--muted);font-size:13px;text-align:center;padding:16px">Loading...</p>';
-  fetch('/api/history')
-    .then(r => r.json())
-    .then(items => {
-      if (!items.length) {
-        list.innerHTML = '<p class="empty-state">No saved scans yet</p>'; return;
-      }
-      list.innerHTML = '';
-      items.forEach(item => {
-        const div = document.createElement('div');
-        div.className = 'history-item' + (item.id === currentScanId ? ' active-scan' : '');
-        const fileNames = (item.filenames || []).join(', ');
-        div.innerHTML = `
-          <div class="hi-top">
-            <span class="hi-ts">${item.timestamp_display}</span>
-            ${item.id === currentScanId ? '<span class="badge bs" style="font-size:10px">current</span>' : ''}
-          </div>
-          <div class="hi-files" title="${esc(fileNames)}">📁 ${esc(fileNames)}</div>
-          <div class="hi-stats">
-            <span class="hi-stat">🖥 ${item.host_count} hosts</span>
-            <span class="hi-stat">🔌 ${item.total_ports} ports</span>
-            ${item.critical_ports ? `<span class="hi-stat" style="color:var(--red)">🔴 ${item.critical_ports} critical</span>` : ''}
-            ${item.vuln_count ? `<span class="hi-stat" style="color:var(--purple)">⚠ ${item.vuln_count} vulns</span>` : ''}
-          </div>
-          <div class="hi-actions">
-            <button class="hi-btn hi-btn-load" onclick="loadHistoryScan('${item.id}')">Load</button>
-            <button class="hi-btn" onclick="downloadHistoryReport('${item.id}','json')">JSON</button>
-            <button class="hi-btn" onclick="downloadHistoryReport('${item.id}','html')">HTML</button>
-            <button class="hi-btn" onclick="downloadHistoryReport('${item.id}','markdown')">MD</button>
-            <button class="hi-btn hi-btn-del" onclick="deleteHistoryScan('${item.id}', this)">Delete</button>
-          </div>`;
-        list.appendChild(div);
-      });
-    })
-    .catch(() => { list.innerHTML = '<p class="empty-state">Failed to load history</p>'; });
-}
-
-function loadHistoryScan(scanId) {
+function loadHistoryScan(id){
   showOverlay('Loading scan...');
-  fetch('/api/history/' + scanId)
-    .then(r => r.json())
-    .then(res => {
-      hideOverlay();
-      if (res.error) { showToast('❌ ' + res.error, true); return; }
-      scanData      = res.data;
-      currentScanId = scanId;
-      closeHistory();
-      if (network) { network.destroy(); network = null; }
-      clustered = false;
-      initApp();
-      showToast('✅ Scan loaded from history');
-    })
-    .catch(() => { hideOverlay(); showToast('❌ Failed to load scan', true); });
+  fetch('/api/history/'+id).then(r=>r.json()).then(res=>{
+    hideOverlay();
+    if(res.error){showToast('Error: '+res.error);return}
+    scanData=res.data;currentScanId=id;
+    closeHistory();
+    document.getElementById('drill-modal').classList.remove('open');
+    if(network){network.destroy();network=null}
+    clustered=false;
+    initApp();
+    showToast('Scan loaded');
+  }).catch(()=>{hideOverlay();showToast('Failed to load')});
 }
-
-function deleteHistoryScan(scanId, btn) {
-  if (!confirm('Delete this scan from history?')) return;
-  fetch('/api/history/' + scanId, { method: 'DELETE' })
-    .then(() => {
-      if (scanId === currentScanId) { currentScanId = null; updateExportSection(); }
-      loadHistoryList();
-      showToast('🗑 Scan deleted');
-    });
-}
-
-function downloadHistoryReport(scanId, fmt) {
-  window.location.href = `/api/report/${scanId}/${fmt}`;
-}
-
-function downloadReport(fmt) {
-  if (!currentScanId) { showToast('⚠ No scan loaded', true); return; }
-  downloadHistoryReport(currentScanId, fmt);
-}
-
-function updateExportSection() {
-  const sec = document.getElementById('export-section');
-  if (sec) sec.style.display = currentScanId ? 'block' : 'none';
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// HELP MODAL
-// ─────────────────────────────────────────────────────────────────────────────
-function openHelp()  { document.getElementById('help-modal').classList.add('open'); }
-function closeHelp() { document.getElementById('help-modal').classList.remove('open'); }
-document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') { closeHelp(); closeHistory(); }
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// TABS
-// ─────────────────────────────────────────────────────────────────────────────
-function switchTab(name) {
-  const names = ['hosts','ports','vulns'];
-  document.querySelectorAll('.tab-btn').forEach((b,i) => b.classList.toggle('active', names[i] === name));
-  document.querySelectorAll('.tab-content').forEach((c,i) => {
-    c.classList.toggle('active', ['tab-hosts','tab-ports','tab-vulns'][i] === 'tab-' + name);
+function deleteHistoryScan(id){
+  if(!confirm('Delete this scan from history?'))return;
+  fetch('/api/history/'+id,{method:'DELETE'}).then(()=>{
+    if(id===currentScanId){currentScanId=null;updateExportSection()}
+    loadHistoryList();loadUploadHistory();showToast('Scan deleted');
   });
 }
+function dlReport(id,fmt){window.location.href=`/api/report/${id}/${fmt}`}
+function downloadReport(fmt){if(!currentScanId){showToast('No scan loaded');return}dlReport(currentScanId,fmt)}
+function updateExportSection(){const s=document.getElementById('export-section');if(s)s.style.display=currentScanId?'block':'none'}
 
-// ─────────────────────────────────────────────────────────────────────────────
-// UTILS
-// ─────────────────────────────────────────────────────────────────────────────
-function esc(s) {
-  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+// ── HELP ──────────────────────────────────────────────────────────────────
+function openHelp(){document.getElementById('help-modal').classList.add('open')}
+function closeHelp(){document.getElementById('help-modal').classList.remove('open')}
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeHelp();closeHistory();closeDrill()}});
+
+// ── TABS ──────────────────────────────────────────────────────────────────
+function switchTab(name){
+  const names=['hosts','ports','vulns'];
+  document.querySelectorAll('.tab-btn').forEach((b,i)=>b.classList.toggle('active',names[i]===name));
+  document.querySelectorAll('.tab-content').forEach((c,i)=>c.classList.toggle('active',['tab-hosts','tab-ports','tab-vulns'][i]==='tab-'+name));
 }
 
-function showOverlay(text) {
-  document.getElementById('overlay-text').textContent = text || 'Processing...';
-  document.getElementById('overlay').classList.add('show');
-}
-function hideOverlay() { document.getElementById('overlay').classList.remove('show'); }
+// ── UTILS ─────────────────────────────────────────────────────────────────
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function showOverlay(t){document.getElementById('overlay-text').textContent=t;document.getElementById('overlay').classList.add('show')}
+function hideOverlay(){document.getElementById('overlay').classList.remove('show')}
+let _tt;
+function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(_tt);_tt=setTimeout(()=>t.classList.remove('show'),3000)}
 
-let toastTimer;
-function showToast(msg, isError) {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.style.borderColor = isError ? 'var(--red)' : 'var(--border)';
-  t.classList.add('show');
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.remove('show'), 3000);
-}
+// ── INIT ON LOAD ──────────────────────────────────────────────────────────
+loadUploadHistory();
 </script>
 </body>
 </html>
