@@ -6,6 +6,7 @@
 <title>NmapViz</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='18' fill='%230d1117'/%3E%3Ccircle cx='50' cy='50' r='38' fill='none' stroke='%234d9de0' stroke-width='2.5' opacity='.4'/%3E%3Ccircle cx='50' cy='50' r='22' fill='none' stroke='%234d9de0' stroke-width='2' opacity='.6'/%3E%3Cline x1='50' y1='50' x2='76' y2='26' stroke='%237c3aed' stroke-width='3'/%3E%3Cline x1='50' y1='50' x2='75' y2='73' stroke='%23f85149' stroke-width='3'/%3E%3Cline x1='50' y1='50' x2='82' y2='51' stroke='%233fb950' stroke-width='2.5'/%3E%3Ccircle cx='76' cy='26' r='5.5' fill='%237c3aed'/%3E%3Ccircle cx='75' cy='73' r='5' fill='%23f85149'/%3E%3Ccircle cx='82' cy='51' r='4.5' fill='%233fb950'/%3E%3Ccircle cx='50' cy='50' r='7' fill='%231f3a52' stroke='%234d9de0' stroke-width='2'/%3E%3Ccircle cx='50' cy='50' r='3' fill='%234d9de0'/%3E%3C/svg%3E">
 <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Orbitron:wght@700&display=swap');
 :root {
@@ -263,6 +264,37 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-body);font-si
 ::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}::-webkit-scrollbar-thumb:hover{background:var(--muted)}
 .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:10px 20px;font-size:13px;z-index:600;opacity:0;transition:opacity .3s;pointer-events:none;font-weight:500;color:var(--text)}
 .toast.show{opacity:1}
+
+/* FOOTER */
+.app-footer{display:flex;align-items:center;gap:16px;padding:8px 20px;background:var(--surface);border-top:1px solid var(--border);flex-shrink:0;font-size:12px;color:var(--muted);z-index:5}
+.footer-name{font-weight:600;color:var(--text2)}
+.footer-links{display:flex;gap:12px}
+.footer-link{color:var(--muted);text-decoration:none;transition:color .15s;display:flex;align-items:center;gap:5px}
+.footer-link:hover{color:var(--accent)}
+.footer-link svg{flex-shrink:0}
+.footer-right{margin-left:auto;font-size:11px;color:var(--dim)}
+
+/* TODO PANEL */
+.todo-card{border:1px solid rgba(77,157,224,.2);border-left:3px solid var(--si);background:rgba(77,157,224,.03);padding:10px 12px;margin-bottom:7px;border-radius:5px}
+.todo-card.priority-high{border-left-color:var(--sh);border-color:rgba(248,81,73,.2);background:rgba(248,81,73,.03)}
+.todo-header{display:flex;align-items:center;gap:7px;margin-bottom:4px}
+.todo-priority{font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;border:1px solid;font-family:var(--font-mono)}
+.todo-priority.high{border-color:var(--sh);color:var(--sh);background:rgba(248,81,73,.1)}
+.todo-priority.medium{border-color:var(--si);color:var(--si);background:rgba(77,157,224,.1)}
+.todo-title{font-size:13px;font-weight:600;color:var(--text)}
+.todo-desc{font-size:12px;color:var(--text2);line-height:1.5;margin-bottom:5px}
+.todo-followup{background:rgba(0,0,0,.25);border:1px solid var(--border);border-left:3px solid var(--cyan);padding:6px 9px;border-radius:3px;font-size:12px;margin-top:5px}
+.todo-followup .fu-label{color:var(--cyan);font-size:10px;font-weight:600;letter-spacing:.3px;margin-bottom:3px}
+.todo-followup code{color:var(--teal);word-break:break-all;cursor:pointer;font-family:var(--font-mono);font-size:11px}
+.todo-followup code:hover{color:var(--accent);text-decoration:underline}
+
+/* EXPORT DROPDOWN */
+.export-dropdown{position:relative}
+.export-menu{display:none;position:absolute;top:calc(100% + 6px);right:0;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;min-width:160px;box-shadow:0 8px 24px rgba(0,0,0,.5);z-index:50;overflow:hidden}
+.export-menu.open{display:block}
+.export-menu button{display:block;width:100%;text-align:left;padding:9px 16px;font-size:13px;font-family:var(--font-body);font-weight:500;color:var(--text2);background:transparent;border:none;cursor:pointer;transition:background .12s}
+.export-menu button:hover{background:rgba(77,157,224,.1);color:var(--accent)}
+.export-menu button+button{border-top:1px solid var(--border)}
 </style>
 </head>
 <body>
@@ -308,8 +340,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-body);font-si
       <p class="sub">Drop one or more <strong>.xml</strong> files here, or click to select</p>
       <div class="multi-badge">✓ Multi-file supported. files will be merged automatically</div>
       <div class="drop-hint">
-        <p><code>nmap -sV -oX output.xml 192.168.1.0/24</code> . version detection (recommended)</p>
-        <p><code>nmap -A -oX output.xml 192.168.1.0/24</code> . aggressive: OS + scripts + versions</p>
+        <p><code>nmap -sV -oX output.xml [target]</code> . version detection (recommended)</p>
+        <p><code>nmap -A -oX output.xml [target]</code> . aggressive: OS + scripts + versions</p>
         <p><code>nmap -sV --script vuln -oX out.xml target</code> . vulnerability detection</p>
       </div>
     </div>
@@ -335,6 +367,16 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-body);font-si
     <div class="topbar-right">
       <button class="btn-icon" onclick="openHelp()">📖 Reference</button>
       <button class="btn-icon" onclick="openHistory()">🕑 History</button>
+      <div class="export-dropdown" id="export-dropdown">
+        <button class="btn-icon" onclick="toggleExportMenu()" id="export-menu-btn">⬇ Export ▾</button>
+        <div class="export-menu" id="export-menu">
+          <button onclick="downloadReport('json');toggleExportMenu()">⬇ JSON</button>
+          <button onclick="downloadReport('html');toggleExportMenu()">⬇ HTML</button>
+          <button onclick="downloadReport('markdown');toggleExportMenu()">⬇ Markdown</button>
+          <button onclick="downloadReport('xlsx');toggleExportMenu()">⬇ XLSX</button>
+          <button onclick="downloadReport('pdf');toggleExportMenu()">⬇ PDF</button>
+        </div>
+      </div>
       <button class="btn btn-primary" onclick="resetApp()">+ New Scan</button>
     </div>
   </div>
@@ -355,6 +397,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-body);font-si
         <button class="tab-btn active" onclick="switchTab('hosts')">🖥 Hosts</button>
         <button class="tab-btn" onclick="switchTab('ports')">🔌 Ports</button>
         <button class="tab-btn" onclick="switchTab('vulns')">⚠️ Vulns</button>
+        <button class="tab-btn" onclick="openActionsPanel()">📋 Actions</button>
       </div>
       <div class="tab-content active" id="tab-hosts"><div id="host-list"></div></div>
       <div class="tab-content" id="tab-ports"><div id="detail-panel"><p class="empty-state">Select a host to view ports</p></div></div>
@@ -362,6 +405,15 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-body);font-si
     </div>
     <div id="graph-container">
       <div id="graph"></div>
+      <div id="graph-placeholder" style="display:none;position:absolute;inset:0;align-items:center;justify-content:center;flex-direction:column;gap:14px;background:var(--bg)">
+        <div style="text-align:center;max-width:400px">
+          <div style="font-size:48px;margin-bottom:12px">🗺️</div>
+          <div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:8px" id="graph-placeholder-msg">Graph hidden for performance</div>
+          <div style="font-size:13px;color:var(--muted);margin-bottom:20px">Large scans with many hosts can cause the browser to slow down significantly. The graph will load clusters only.</div>
+          <button class="btn btn-primary" onclick="loadGraphAnyway()" id="graph-load-btn">Load Graph</button>
+          <button class="btn btn-ghost" onclick="loadGraphClustered()" id="graph-cluster-btn" style="margin-left:8px">Load Clustered</button>
+        </div>
+      </div>
       <div class="graph-overlay-tl">
         <div class="graph-legend">
           <div class="legend-title">Node Legend</div>
@@ -375,8 +427,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-body);font-si
       </div>
       <div class="graph-ctrl">
         <button class="ctrl-btn" onclick="network&&network.fit()">⊕ Fit</button>
-        <button class="ctrl-btn" onclick="togglePhysics()">⚙ Physics</button>
+        <button class="ctrl-btn" onclick="togglePhysics()" id="physics-btn">⚙ Physics</button>
         <button class="ctrl-btn" onclick="toggleClustering()" id="cluster-btn">⬡ Cluster</button>
+        <button class="ctrl-btn" id="hide-graph-btn" onclick="hideGraph()" title="Hide graph to improve performance">👁 Hide</button>
       </div>
       <div class="scan-info-overlay" id="scan-info-overlay" style="display:none">
         <span id="scan-info-text"></span>
@@ -384,6 +437,22 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-body);font-si
       </div>
     </div>
   </div>
+
+  <!-- FOOTER -->
+</div>
+
+<!-- ========== ACTIONS PANEL ========== -->
+<div id="actions-panel" style="position:fixed;top:0;right:-480px;width:480px;height:100vh;background:var(--surface);border-left:1px solid var(--border);z-index:200;transition:right .3s ease;display:flex;flex-direction:column;box-shadow:-8px 0 32px rgba(0,0,0,.5)">
+  <div class="panel-header">
+    <h3>📋 Investigation Actions</h3>
+    <div style="margin-left:auto;display:flex;gap:6px">
+      <button class="btn-icon" onclick="exportActionsJson()" title="Export as JSON">⬇ JSON</button>
+      <button class="btn-icon" onclick="exportActionsCsv()" title="Export as CSV">⬇ CSV</button>
+      <button class="btn-icon" onclick="closeActionsPanel()">✕</button>
+    </div>
+  </div>
+  <div style="padding:8px 12px;border-bottom:1px solid var(--border);display:flex;gap:6px;flex-wrap:wrap;flex-shrink:0" id="actions-filter-bar"></div>
+  <div style="flex:1;overflow-y:auto;padding:12px" id="actions-body"></div>
 </div>
 
 <!-- ========== HISTORY PANEL ========== -->
@@ -395,10 +464,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-body);font-si
   <div class="panel-body" id="history-list"></div>
   <div class="export-section" id="export-section" style="display:none">
     <h4>Export current scan</h4>
-    <div class="export-grid">
+    <div class="export-grid" style="grid-template-columns:1fr 1fr 1fr">
       <button class="export-btn" onclick="downloadReport('json')">JSON</button>
       <button class="export-btn" onclick="downloadReport('html')">HTML</button>
       <button class="export-btn" onclick="downloadReport('markdown')">MD</button>
+      <button class="export-btn" onclick="downloadReport('xlsx')" style="color:var(--green);border-color:rgba(63,185,80,.3)">XLSX</button>
       <button class="export-btn" onclick="downloadReport('pdf')" style="color:var(--sc);border-color:rgba(124,58,237,.3)">PDF</button>
     </div>
   </div>
@@ -412,6 +482,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-body);font-si
       <div class="drill-export-bar">
         <button class="drill-export-btn" onclick="exportDrill('csv')">⬇ CSV</button>
         <button class="drill-export-btn" onclick="exportDrill('json')">⬇ JSON</button>
+        <button class="drill-export-btn" onclick="exportDrill('xlsx')">⬇ XLSX</button>
       </div>
       <button class="btn-icon" onclick="closeDrill()" style="margin-left:8px">✕</button>
     </div>
@@ -435,8 +506,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-body);font-si
     <div class="modal-body">
       <div class="help-section">
         <h3>Essential Commands</h3>
-        <div class="cmd-block"><code>nmap -sV -oX output.xml 192.168.1.0/24</code><p>Version detection. The recommended starting point. enables vulnerability matching in NmapViz.</p></div>
-        <div class="cmd-block"><code>nmap -A -oX output.xml 192.168.1.0/24</code><p>Aggressive: OS detection + version + default scripts + traceroute. More data, more noise.</p></div>
+        <div class="cmd-block"><code>nmap -sV -oX output.xml [target]</code><p>Version detection. The recommended starting point. enables vulnerability matching in NmapViz.</p></div>
+        <div class="cmd-block"><code>nmap -A -oX output.xml [target]</code><p>Aggressive: OS detection + version + default scripts + traceroute. More data, more noise.</p></div>
         <div class="cmd-block"><code>nmap -sV --script vuln -oX output.xml [target]</code><p>Vulnerability scripts: EternalBlue, Heartbleed, SMB issues, FTP anon, RDP checks, etc.</p></div>
         <div class="cmd-block"><code>nmap -sV --script default,vuln -oX output.xml [target]</code><p>Default + vuln scripts combined. Best coverage/time balance.</p></div>
       </div>
@@ -462,7 +533,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-body);font-si
       </div>
       <div class="help-section">
         <h3>Multi-File Scanning (NmapViz feature)</h3>
-        <div class="cmd-block"><code>nmap -sV -oX scan_192.xml 192.168.1.0/24
+        <div class="cmd-block"><code>nmap -sV -oX scan_192.xml [target]
 nmap -sV -oX scan_10.xml  10.0.0.0/24</code><p>Scan different subnets separately, then drop both XMLs into NmapViz at once. They are merged automatically.</p></div>
       </div>
       <div class="help-section">
@@ -639,6 +710,7 @@ function renderHostList(){
     const r=h.ports.filter(p=>p.classification==='normal').length;
     const rv=h.vulns.filter(v=>v.severity!=='INFO').length;
     const iv=h.vulns.filter(v=>v.severity==='INFO').length;
+    const todos_count=(h.todos||[]).length;
     div.innerHTML=`
       <div class="host-ip">${h.ip||'?'}</div>
       <div class="host-meta">${h.hostname?h.hostname+' &middot; ':''}${h.os?h.os.substring(0,36):'OS unknown'}${h.os_accuracy?' ('+h.os_accuracy+'%)':''}</div>
@@ -648,7 +720,7 @@ function renderHostList(){
         ${n?`<span class="pill pill-i">&#x1f534; ${n} interesting</span>`:''}
         ${r?`<span class="pill pill-n">&#x1f7e2; ${r} ports</span>`:''}
         ${rv?`<span class="pill pill-v">&#x26a0;&#xfe0f; ${rv} vulns</span>`:''}
-        ${iv?`<span class="pill" style="border-color:rgba(77,157,224,.3);color:var(--si)">&#x2139;&#xfe0f; ${iv} info</span>`:''}
+        ${todos_count?`<span class="pill" style="border-color:rgba(77,157,224,.3);color:var(--si)">&#x1f4cb; ${todos_count} actions</span>`:''}
       </div>`;
     div.onclick=()=>selectHost(i);
     list.appendChild(div);
@@ -715,6 +787,30 @@ function renderVulnDetail(h){
   });
   panel.innerHTML=html;
 }
+function renderTodoDetail(h){
+  const panel=document.getElementById('todo-panel');
+  const todos=h.todos||[];
+  if(!todos.length){
+    panel.innerHTML=`<div style="text-align:center;padding:28px 12px;color:var(--green);font-size:14px">No investigation actions for ${h.ip}<br><small style="color:var(--muted);display:block;margin-top:8px;font-size:12px">All detected ports had service info or are not noteworthy</small></div>`;
+    return;
+  }
+  const sorted=[...todos].sort((a,b)=>a.priority==='high'&&b.priority!=='high'?-1:b.priority==='high'&&a.priority!=='high'?1:0);
+  let html=`<div style="font-size:12px;color:var(--muted);margin-bottom:10px;padding:0 12px;padding-top:12px">${sorted.length} investigation action(s) for ${h.ip}</div>`;
+  sorted.forEach(t=>{
+    html+=`<div style="padding:0 12px 6px">
+      <div class="todo-card ${t.priority==='high'?'priority-high':''}">
+        <div class="todo-header">
+          <span class="todo-priority ${t.priority}">${t.priority.toUpperCase()}</span>
+          <span class="todo-title">${esc(t.title)}</span>
+        </div>
+        <div class="todo-desc">${esc(t.description)}</div>
+        ${t.followup?`<div class="todo-followup"><div class="fu-label">Recommended scan</div><code onclick="copyCmd(this)" title="Click to copy">${esc(t.followup)}</code></div>`:''}
+      </div>
+    </div>`;
+  });
+  panel.innerHTML=html;
+}
+
 function copyCmd(el){
   navigator.clipboard.writeText(el.textContent).then(()=>showToast('Command copied to clipboard'));
 }
@@ -824,20 +920,36 @@ function renderDrillVulns(){
 
 function exportDrill(fmt){
   if(!drillData.length){showToast('No data to export');return}
-  let content,filename,mime;
+  const filename_base=`nmapviz_${drillMode}`;
   if(fmt==='json'){
-    content=JSON.stringify(drillData,null,2);
-    filename=`nmapviz_${drillMode}.json`;mime='application/json';
-  } else {
-    const keys=Object.keys(drillData[0]);
+    const content=JSON.stringify(drillData,null,2);
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(new Blob([content],{type:'application/json'}));
+    a.download=filename_base+'.json';a.click();
+    showToast('Exported '+filename_base+'.json');
+  } else if(fmt==='csv'){
+    const keys=Object.keys(drillData[0]).filter(k=>k!=='scripts'&&k!=='followup');
     const rows=[keys.join(','),...drillData.map(r=>keys.map(k=>{const v=String(r[k]||'').replace(/"/g,'""');return v.includes(',')||v.includes('"')||v.includes('\n')?`"${v}"`:v}).join(','))];
-    content=rows.join('\n');
-    filename=`nmapviz_${drillMode}.csv`;mime='text/csv';
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(new Blob([rows.join('\n')],{type:'text/csv'}));
+    a.download=filename_base+'.csv';a.click();
+    showToast('Exported '+filename_base+'.csv');
+  } else if(fmt==='xlsx'){
+    // Use SheetJS if available, else fallback to CSV
+    if(typeof XLSX!=='undefined'){
+      const keys=Object.keys(drillData[0]).filter(k=>k!=='scripts'&&k!=='followup');
+      const wsData=[keys,...drillData.map(r=>keys.map(k=>r[k]||''))];
+      const ws=XLSX.utils.aoa_to_sheet(wsData);
+      const wb=XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb,ws,drillMode);
+      XLSX.writeFile(wb,filename_base+'.xlsx');
+      showToast('Exported '+filename_base+'.xlsx');
+    } else {
+      // SheetJS not loaded — trigger server-side xlsx if current scan
+      if(currentScanId)dlReport(currentScanId,'xlsx');
+      else showToast('Full XLSX available from History panel');
+    }
   }
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob([content],{type:mime}));
-  a.download=filename;a.click();
-  showToast('Exported '+filename);
 }
 
 // ── SIDEBAR RESIZE ────────────────────────────────────────────────────────
@@ -862,32 +974,95 @@ function exportDrill(fmt){
 
 // ── GRAPH ─────────────────────────────────────────────────────────────────
 function detectClusterLevel(hosts){
+  // Pick the grouping level that actually produces 2+ hosts per group.
+  // /24 = 3 octets, /16 = 2 octets, /8 = 1 octet
   const ips=hosts.map(h=>h.ip||'0.0.0.0');
-  const o0=new Set(ips.map(ip=>ip.split('.')[0]));
-  const o1=new Set(ips.map(ip=>ip.split('.').slice(0,2).join('.')));
-  if(o0.size>1)return 2;if(o1.size>1)return 3;return 3;
+  function groupCounts(level){
+    const m={};
+    ips.forEach(ip=>{const k=ip.split('.').slice(0,level).join('.');m[k]=(m[k]||0)+1});
+    return Object.values(m);
+  }
+  // Try /24 first: good if at least one group has 2+ hosts
+  const g3=groupCounts(3);
+  if(g3.some(c=>c>=2))return 3;
+  // Try /16
+  const g2=groupCounts(2);
+  if(g2.some(c=>c>=2))return 2;
+  // Try /8
+  return 1;
 }
 function getSubnetKey(ip,level){return(ip||'0.0.0.0').split('.').slice(0,level).join('.')}
 
-function renderGraph(){
+const GRAPH_THRESHOLD = 80; // auto-hide graph above this many hosts
+
+function renderGraph(forceDirect=false, forceClustered=false){
+  const placeholder = document.getElementById('graph-placeholder');
+  const graphDiv    = document.getElementById('graph');
+  const count       = scanData.hosts.length;
+
+  // Show placeholder for large scans unless user explicitly loaded
+  if(count > GRAPH_THRESHOLD && !forceDirect && !forceClustered){
+    placeholder.style.display='flex';
+    graphDiv.style.display='none';
+    document.getElementById('graph-placeholder-msg').textContent =
+      count + ' hosts detected. Graph auto-hidden to prevent slowdowns.';
+    document.getElementById('graph-load-btn').textContent = 'Load All ' + count + ' Nodes';
+    return;
+  }
+
+  placeholder.style.display='none';
+  graphDiv.style.display='block';
+
   const nodes=[],edges=[];
-  nodes.push({id:0,label:'Scanner\n'+(scanData.args||'nmap').substring(0,38),color:{background:'#1f3a52',border:'#4d9de0',highlight:{background:'#1f4a6e',border:'#6db3ee'}},font:{color:'#cdd9e5',size:12,face:'Inter'},shape:'ellipse',size:28,shadow:true});
+  nodes.push({id:0,label:'Scanner\n'+(scanData.args||'nmap').substring(0,38),
+    color:{background:'#1f3a52',border:'#4d9de0',highlight:{background:'#1f4a6e',border:'#6db3ee'}},
+    font:{color:'#cdd9e5',size:12,face:'Inter'},shape:'ellipse',size:28,shadow:true});
   scanData.hosts.forEach((h,i)=>{
     const col=hostColor(h);
-    const c=h.ports.filter(p=>p.classification==='critical').length;
-    const n=h.ports.filter(p=>p.classification==='interesting').length;
+    const nc=h.ports.filter(p=>p.classification==='critical').length;
+    const ni=h.ports.filter(p=>p.classification==='interesting').length;
     const rv=h.vulns.filter(v=>v.severity!=='INFO').length;
-    const lbl=[h.ip||'?',h.hostname?h.hostname.substring(0,24):'',h.os?h.os.substring(0,26):'',h.ports.length+' port(s)',c?c+' critical':'',n?n+' interesting':'',rv?rv+' finding(s)':''].filter(Boolean).join('\n');
-    nodes.push({id:i+1,label:lbl,hostIndex:i,subnet2:getSubnetKey(h.ip,2),subnet3:getSubnetKey(h.ip,3),color:{background:col+'1a',border:col,highlight:{background:col+'35',border:col}},font:{color:'#cdd9e5',size:12,face:'Inter'},shape:'box',borderWidth:2,shadow:true});
+    const lbl=[h.ip||'?',h.hostname?h.hostname.substring(0,24):'',h.os?h.os.substring(0,26):'',
+      h.ports.length+' port(s)',nc?nc+' critical':'',ni?ni+' interesting':'',rv?rv+' finding(s)':''].filter(Boolean).join('\n');
+    nodes.push({id:i+1,label:lbl,hostIndex:i,subnet2:getSubnetKey(h.ip,2),subnet3:getSubnetKey(h.ip,3),
+      color:{background:col+'1a',border:col,highlight:{background:col+'35',border:col}},
+      font:{color:'#cdd9e5',size:12,face:'Inter'},shape:'box',borderWidth:2,shadow:true});
     edges.push({from:0,to:i+1,color:{color:col+'55',highlight:col},width:1.5});
   });
+
+  // Use lighter physics for large scans
+  const iters = count > 30 ? 60 : 120;
+  const physOpts = {enabled:physicsOn,stabilization:{iterations:iters,updateInterval:30},
+    barnesHut:{gravitationalConstant:-5000,springLength:170,springConstant:.035,damping:.18}};
+
   const container=document.getElementById('graph');
   nodesDS=new vis.DataSet(nodes);edgesDS=new vis.DataSet(edges);
-  const options={physics:{enabled:true,stabilization:{iterations:120,updateInterval:25},barnesHut:{gravitationalConstant:-6000,springLength:160,springConstant:.04,damping:.15}},interaction:{hover:true,tooltipDelay:200},edges:{smooth:{type:'dynamic'}},nodes:{margin:8}};
+  const options={physics:physOpts,interaction:{hover:true,tooltipDelay:200},
+    edges:{smooth:{type:'dynamic'}},nodes:{margin:8}};
   network=new vis.Network(container,{nodes:nodesDS,edges:edgesDS},options);
-  network.on('click',params=>{if(params.nodes.length>0){const nd=nodesDS.get(params.nodes[0]);if(nd&&nd.hostIndex!==undefined)selectHost(nd.hostIndex)}});
-  network.on('doubleClick',params=>{if(params.nodes.length>0&&network.isCluster(params.nodes[0])){network.openCluster(params.nodes[0]);if(!hasAnyClusters()){clustered=false;document.getElementById('cluster-btn').textContent='⬡ Cluster'}}});
-  network.once('stabilized',()=>{if(scanData.hosts.length>=6)applySubnetClustering()});
+  network.on('click',params=>{
+    if(params.nodes.length>0){const nd=nodesDS.get(params.nodes[0]);if(nd&&nd.hostIndex!==undefined)selectHost(nd.hostIndex)}
+  });
+  network.on('doubleClick',params=>{
+    if(params.nodes.length>0&&network.isCluster(params.nodes[0])){
+      network.openCluster(params.nodes[0]);
+      if(!hasAnyClusters()){clustered=false;document.getElementById('cluster-btn').textContent='⬡ Cluster'}
+    }
+  });
+  // Auto-cluster large scans or when forceClustered
+  const autoCluster = count >= 6;
+  if(autoCluster || forceClustered){
+    network.once('stabilized',()=>applySubnetClustering());
+  }
+}
+
+function loadGraphAnyway(){ if(network){network.destroy();network=null} clustered=false; renderGraph(true,false); }
+function loadGraphClustered(){ if(network){network.destroy();network=null} clustered=false; renderGraph(false,true); }
+function hideGraph(){
+  if(network){network.destroy();network=null}
+  document.getElementById('graph-placeholder').style.display='flex';
+  document.getElementById('graph').style.display='none';
+  document.getElementById('graph-placeholder-msg').textContent='Graph hidden. Click to reload.';
 }
 function applySubnetClustering(){
   const level=detectClusterLevel(scanData.hosts),mask=level===2?'/16':'/24';
@@ -907,7 +1082,7 @@ function applySubnetClustering(){
 function toggleClustering(){
   if(!network||!scanData)return;
   if(!clustered)applySubnetClustering();
-  else { network.cluster({ joinCondition: () => false }); document.getElementById('cluster-btn').textContent = '⬡ Cluster'; } 
+  else { for(let s=20; hasAnyClusters() && s--;) network.getNodeIds().forEach(id => { try { network.isCluster(id) && network.openCluster(id) } catch(e) {} }); clustered = false; document.getElementById('cluster-btn').textContent = '⬡ Cluster'; }
 }
 function hasAnyClusters(){try{return network.getNodeIds().some(id=>network.isCluster(id))}catch(e){return false}}
 function togglePhysics(){physicsOn=!physicsOn;network&&network.setOptions({physics:{enabled:physicsOn}})}
@@ -935,13 +1110,16 @@ function loadHistoryList(){
           ${item.vuln_count?`<span class="hi-stat" style="color:var(--sm)">&#x26a0;&#xfe0f; ${item.vuln_count} vulns</span>`:''}
         </div>
         <div class="hi-actions">
-          <button class="hi-btn hi-btn-load" onclick="loadHistoryScan('${item.id}')">Load</button>
-          <button class="hi-btn" onclick="dlReport('${item.id}','json')">JSON</button>
-          <button class="hi-btn" onclick="dlReport('${item.id}','html')">HTML</button>
-          <button class="hi-btn" onclick="dlReport('${item.id}','markdown')">MD</button>
-          <button class="hi-btn" onclick="dlReport('${item.id}','pdf')" style="color:var(--sc)">PDF</button>
-          <button class="hi-btn hi-btn-del" onclick="deleteHistoryScan('${item.id}',this)">Delete</button>
+          <button class="hi-btn hi-btn-load" onclick="event.stopPropagation();loadHistoryScan('${item.id}')">&#x25b6; Open</button>
+          <button class="hi-btn" onclick="event.stopPropagation();dlReport('${item.id}','json')">JSON</button>
+          <button class="hi-btn" onclick="event.stopPropagation();dlReport('${item.id}','html')">HTML</button>
+          <button class="hi-btn" onclick="event.stopPropagation();dlReport('${item.id}','markdown')">MD</button>
+          <button class="hi-btn" onclick="event.stopPropagation();dlReport('${item.id}','xlsx')" style="color:var(--green)">XLSX</button>
+          <button class="hi-btn" onclick="event.stopPropagation();dlReport('${item.id}','pdf')" style="color:var(--sc)">PDF</button>
+          <button class="hi-btn hi-btn-del" onclick="event.stopPropagation();deleteHistoryScan('${item.id}')">Delete</button>
         </div>`;
+      div.onclick=()=>loadHistoryScan(item.id);
+      div.style.cursor='pointer';
       list.appendChild(div);
     });
   }).catch(()=>{list.innerHTML='<p class="empty-state">Failed to load history</p>'});
@@ -974,7 +1152,98 @@ function updateExportSection(){const s=document.getElementById('export-section')
 // ── HELP ──────────────────────────────────────────────────────────────────
 function openHelp(){document.getElementById('help-modal').classList.add('open')}
 function closeHelp(){document.getElementById('help-modal').classList.remove('open')}
-document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeHelp();closeHistory();closeDrill()}});
+
+// Export dropdown
+function toggleExportMenu(){
+  const m=document.getElementById('export-menu');
+  m.classList.toggle('open');
+}
+document.addEventListener('click',e=>{
+  const btn=document.getElementById('export-menu-btn');
+  const menu=document.getElementById('export-menu');
+  if(menu&&!menu.contains(e.target)&&btn&&!btn.contains(e.target)){
+    menu.classList.remove('open');
+  }
+});
+
+// Actions panel
+function openActionsPanel(){
+  if(!scanData)return;
+  buildActionsPanel();
+  document.getElementById('actions-panel').style.right='0';
+}
+function closeActionsPanel(){ document.getElementById('actions-panel').style.right='-480px'; }
+
+function buildActionsPanel(){
+  const body=document.getElementById('actions-body');
+  const filterBar=document.getElementById('actions-filter-bar');
+  // Gather all todos from all hosts
+  const allTodos=[];
+  scanData.hosts.forEach(h=>{(h.todos||[]).forEach(t=>allTodos.push({...t,host:h.ip}))});
+  
+  if(!allTodos.length){
+    filterBar.innerHTML='';
+    body.innerHTML='<div style="text-align:center;padding:40px 20px;color:var(--green);font-size:14px">No investigation actions found.<br><small style="color:var(--muted);font-size:12px;display:block;margin-top:8px">All detected ports had service info or are not notable.</small></div>';
+    return;
+  }
+
+  // Filter bar
+  const priorities=['all','high','medium'];
+  let activePriority='all';
+  function renderFilter(){
+    filterBar.innerHTML='';
+    priorities.forEach(p=>{
+      const btn=document.createElement('button');
+      btn.className='drill-filter'+(p===activePriority?' active':'');
+      btn.textContent=p==='all'?'All ('+allTodos.length+')':p.charAt(0).toUpperCase()+p.slice(1)+' ('+allTodos.filter(t=>t.priority===p).length+')';
+      btn.onclick=()=>{activePriority=p;renderFilter();renderList()};
+      filterBar.appendChild(btn);
+    });
+  }
+  function renderList(){
+    const filtered = activePriority==='all' ? allTodos : allTodos.filter(t=>t.priority===activePriority);
+    const sorted=[...filtered].sort((a,b)=>(a.priority==='high'?0:1)-(b.priority==='high'?0:1));
+    if(!sorted.length){body.innerHTML='<p class="empty-state">No actions match this filter.</p>';return}
+    body.innerHTML=sorted.map(t=>`
+      <div class="todo-card ${t.priority==='high'?'priority-high':''}" style="margin-bottom:8px">
+        <div class="todo-header">
+          <span class="todo-priority ${t.priority}">${t.priority.toUpperCase()}</span>
+          <span style="font-size:12px;color:var(--muted);font-family:var(--font-mono)">${esc(t.host)}</span>
+          <span style="font-size:11px;color:var(--accent);margin-left:4px">:${t.port}</span>
+        </div>
+        <div class="todo-title" style="margin-bottom:4px">${esc(t.title)}</div>
+        <div class="todo-desc">${esc(t.description)}</div>
+        ${t.followup?`<div class="todo-followup"><div class="fu-label">Recommended scan</div><code onclick="copyCmd(this)" title="Click to copy">${esc(t.followup)}</code></div>`:''}
+      </div>`).join('');
+  }
+  renderFilter();
+  renderList();
+}
+
+function exportActionsJson(){
+  if(!scanData)return;
+  const allTodos=[];
+  scanData.hosts.forEach(h=>(h.todos||[]).forEach(t=>allTodos.push({...t,host:h.ip})));
+  if(!allTodos.length){showToast('No actions to export');return}
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([JSON.stringify(allTodos,null,2)],{type:'application/json'}));
+  a.download='nmapviz_actions.json';a.click();showToast('Exported actions.json');
+}
+function exportActionsCsv(){
+  if(!scanData)return;
+  const allTodos=[];
+  scanData.hosts.forEach(h=>(h.todos||[]).forEach(t=>allTodos.push({...t,host:h.ip})));
+  if(!allTodos.length){showToast('No actions to export');return}
+  const keys=['host','port','priority','title','reason','description'];
+  const rows=[keys.join(','),...allTodos.map(t=>keys.map(k=>{const v=String(t[k]||'').replace(/"/g,'""');return v.includes(',')||v.includes('"')||v.includes('\n')?`"${v}"`:v}).join(','))];
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([rows.join('\n')],{type:'text/csv'}));
+  a.download='nmapviz_actions.csv';a.click();showToast('Exported actions.csv');
+}
+
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){closeHelp();closeHistory();closeDrill();closeActionsPanel();document.getElementById('export-menu').classList.remove('open')}
+});
 
 // ── TABS ──────────────────────────────────────────────────────────────────
 function switchTab(name){
@@ -993,5 +1262,24 @@ function showToast(msg){const t=document.getElementById('toast');t.textContent=m
 // ── INIT ON LOAD ──────────────────────────────────────────────────────────
 loadUploadHistory();
 </script>
+
+<footer class="app-footer" id="main-footer">
+    <span class="footer-name">ch3ngo</span>
+    <div class="footer-links">
+      <a class="footer-link" href="https://www.linkedin.com/in/diego-fidalgo/" target="_blank" rel="noopener">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>
+        LinkedIn
+      </a>
+      <a class="footer-link" href="https://github.com/ch3ngo" target="_blank" rel="noopener">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+        GitHub
+      </a>
+      <a class="footer-link" href="https://ch3ngo.github.io" target="_blank" rel="noopener">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+        Blog
+      </a>
+    </div>
+    <span class="footer-right">NmapViz . Open source network scanner visualizer</span>
+  </footer>
 </body>
 </html>

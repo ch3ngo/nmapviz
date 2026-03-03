@@ -203,51 +203,44 @@ def detect_vulnerabilities(host_data):
         is_interesting = port_num in INTERESTING_PORTS
         port_info      = CRITICAL_PORTS.get(port_num) or INTERESTING_PORTS.get(port_num)
 
-        # ── No service info at all ─────────────────────────────────────────
-        # Only raise a finding if the port is in our critical/interesting list.
-        # A random unidentified port is not actionable noise.
+        # ── No service info at all: generate a TODO, not a vulnerability ───
+        # These are actionable investigation tasks, not confirmed findings.
         if not service.get('name') and not service.get('product'):
             if is_critical or is_interesting:
-                severity = "HIGH" if is_critical else "MEDIUM"
                 cmd = FOLLOWUP_COMMANDS.get(port_num, GENERIC_FOLLOWUP).format(
                     ip=host_data.get('ip', '[TARGET]'), port=port_num)
                 pname = port_info['name']
-                vulns.append({
-                    "severity": severity,
+                host_data.setdefault('todos', []).append({
                     "port": port_num,
-                    "title": f"{pname} Open : Service Unconfirmed (No -sV)",
+                    "priority": "high" if is_critical else "medium",
+                    "title": f"Investigate {pname} on port {port_num}",
+                    "reason": port_info['reason'],
                     "description": (
-                        f"Port {port_num} is open and typically runs {pname}. "
-                        f"No service banner was captured (scan ran without -sV). "
-                        f"Given the nature of this port ({port_info['reason']}), "
-                        f"it should be investigated. Run the follow-up scan to confirm and check for vulnerabilities."
+                        f"Port {port_num} is open. It is typically used by {pname} "
+                        f"but no service banner was captured (scan ran without -sV). "
+                        f"Confirm what is running and assess for vulnerabilities."
                     ),
-                    "cve": "N/A",
-                    "script": "port-classification",
                     "followup": cmd,
                 })
-            # Unknown port, no service info → skip silently, not actionable
+            # Any other port with no service info: skip silently
             continue
 
-        # ── Service identified by port number only (no -sV probing) ───────
-        # Only flag if the port is known to be critical/interesting.
+        # ── Service identified by port number only (table match, no -sV) ──
+        # Generate a TODO for critical/interesting ports, not a vulnerability.
         if method == 'table' and (is_critical or is_interesting):
-            severity = "MEDIUM" if is_critical else "LOW"
             cmd = FOLLOWUP_COMMANDS.get(port_num, GENERIC_FOLLOWUP).format(
                 ip=host_data.get('ip', '[TARGET]'), port=port_num)
             pname = port_info['name']
-            vulns.append({
-                "severity": severity,
+            host_data.setdefault('todos', []).append({
                 "port": port_num,
-                "title": f"{pname} : Version Unknown (Port-Only Match)",
+                "priority": "high" if is_critical else "medium",
+                "title": f"Run version scan on {pname} (port {port_num})",
+                "reason": port_info['reason'],
                 "description": (
-                    f"{pname} on port {port_num} was identified by port number alone : "
-                    f"no service banner was read (scan ran without -sV). "
-                    f"Version info is needed to detect known CVEs and misconfigs. "
-                    f"Run the follow-up scan below."
+                    f"{pname} identified on port {port_num} by port number only. "
+                    f"No service banner was read (scan ran without -sV). "
+                    f"Version info is required to detect known CVEs and misconfigurations."
                 ),
-                "cve": "N/A",
-                "script": "version-detection",
                 "followup": cmd,
             })
 
@@ -450,7 +443,7 @@ def parse_nmap_xml(xml_content):
         if status is None or status.get('state') != 'up':
             continue
         host_data = {"ip": "", "hostname": "", "os": "", "os_accuracy": 0,
-                     "mac": "", "vendor": "", "state": "up", "ports": [], "vulns": []}
+                     "mac": "", "vendor": "", "state": "up", "ports": [], "vulns": [], "todos": []}
 
         for addr in host.findall('address'):
             t = addr.get('addrtype')
@@ -514,7 +507,9 @@ def parse_nmap_xml(xml_content):
                     "classification": classification, "class_reason": class_reason,
                 })
         host_data['vulns'] = detect_vulnerabilities(host_data)
-        scan_info['hosts'].append(host_data)
+        # Skip hosts with no open ports — they clutter the report without adding value
+        if host_data['ports']:
+            scan_info['hosts'].append(host_data)
     return scan_info
 
 
@@ -754,7 +749,204 @@ def _pdf_safe(text):
     return result.encode('latin-1', errors='replace').decode('latin-1')
 
 
+
+def generate_xlsx_report(scan, meta):
+    """Generate a multi-sheet xlsx workbook with full scan data."""
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+
+    wb = openpyxl.Workbook()
+    ts    = meta.get('timestamp_display', '')
+    files = ', '.join(meta.get('filenames', []))
+
+    # ── Colour palette ──────────────────────────────────────────────────────
+    C_BG_HEADER = 'FF1C2330'
+    C_BG_ROW1   = 'FF0D1117'
+    C_BG_ROW2   = 'FF161B22'
+    C_ACCENT    = 'FF4D9DE0'
+    C_CRIT      = 'FF7C3AED'
+    C_HIGH      = 'FFF85149'
+    C_MED       = 'FFE07A30'
+    C_LOW       = 'FF3FB950'
+    C_INFO      = 'FF4D9DE0'
+    C_TEXT      = 'FFCDD9E5'
+    C_MUTED     = 'FF768A9A'
+
+    sev_colors = {'CRITICAL': C_CRIT, 'HIGH': C_HIGH, 'MEDIUM': C_MED,
+                  'LOW': C_LOW, 'INFO': C_INFO}
+
+    def hdr_font(bold=True):
+        return Font(name='Calibri', bold=bold, color=C_TEXT, size=11)
+    def cell_font(color=C_TEXT, bold=False, size=10):
+        return Font(name='Calibri', color=color, bold=bold, size=size)
+    def hdr_fill():
+        return PatternFill('solid', fgColor=C_BG_HEADER)
+    def row_fill(i):
+        return PatternFill('solid', fgColor=C_BG_ROW1 if i%2==0 else C_BG_ROW2)
+    def set_col_width(ws, col, width):
+        ws.column_dimensions[get_column_letter(col)].width = width
+
+    def write_header(ws, headers, widths):
+        ws.append(headers)
+        for i, cell in enumerate(ws[1], 1):
+            cell.font   = hdr_font()
+            cell.fill   = hdr_fill()
+            cell.alignment = Alignment(horizontal='left', vertical='center')
+        for i, w in enumerate(widths, 1):
+            set_col_width(ws, i, w)
+        ws.row_dimensions[1].height = 20
+
+    hosts = scan.get('hosts', [])
+
+    # ── Sheet 1: Summary ────────────────────────────────────────────────────
+    ws = wb.active
+    ws.title = 'Summary'
+    ws.sheet_properties.tabColor = '4D9DE0'
+    ws.column_dimensions['A'].width = 28
+    ws.column_dimensions['B'].width = 50
+
+    summary_data = [
+        ('Report Generated', ts),
+        ('Source Files', files),
+        ('Scan Command', scan.get('args', 'N/A')),
+        ('Version Detection', 'Yes (-sV)' if scan.get('has_version') else 'No (basic scan)'),
+        ('NSE Scripts', 'Yes' if scan.get('has_scripts') else 'No'),
+        ('', ''),
+        ('Active Hosts', len(hosts)),
+        ('Total Open Ports', sum(len(h.get('ports',[])) for h in hosts)),
+        ('Critical Ports', sum(len([p for p in h.get('ports',[]) if p['classification']=='critical']) for h in hosts)),
+        ('Interesting Ports', sum(len([p for p in h.get('ports',[]) if p['classification']=='interesting']) for h in hosts)),
+        ('Total Findings', sum(len(h.get('vulns',[])) for h in hosts)),
+        ('Critical Findings', sum(len([v for v in h.get('vulns',[]) if v['severity']=='CRITICAL']) for h in hosts)),
+        ('High Findings', sum(len([v for v in h.get('vulns',[]) if v['severity']=='HIGH']) for h in hosts)),
+        ('Investigation Actions', sum(len(h.get('todos',[])) for h in hosts)),
+    ]
+    for i, (k, v) in enumerate(summary_data, 1):
+        ws.cell(i, 1, k).font  = cell_font(C_MUTED, bold=True)
+        ws.cell(i, 2, str(v)).font = cell_font(C_TEXT)
+        ws.cell(i, 1).fill = row_fill(i)
+        ws.cell(i, 2).fill = row_fill(i)
+        ws.row_dimensions[i].height = 16
+
+    # ── Sheet 2: Hosts ───────────────────────────────────────────────────────
+    ws2 = wb.create_sheet('Hosts')
+    ws2.sheet_properties.tabColor = '4D9DE0'
+    cols2 = ['IP Address','Hostname','OS','OS Accuracy','MAC','Vendor','Open Ports','Critical Ports','Interesting Ports','Findings','Investigation Actions']
+    wids2 = [18,28,40,14,20,20,14,16,18,12,22]
+    write_header(ws2, cols2, wids2)
+    sev_order = {'CRITICAL':0,'HIGH':1,'MEDIUM':2,'LOW':3,'INFO':4}
+    for i, h in enumerate(sorted(hosts, key=lambda x: [int(p) for p in (x.get('ip','0')+'.0.0.0').split('.')[:4]]), 2):
+        hc = len([p for p in h.get('ports',[]) if p['classification']=='critical'])
+        hi = len([p for p in h.get('ports',[]) if p['classification']=='interesting'])
+        hv = len(h.get('vulns',[]))
+        ht = len(h.get('todos',[]))
+        row = [h.get('ip',''), h.get('hostname',''), h.get('os',''), h.get('os_accuracy',''),
+               h.get('mac',''), h.get('vendor',''), len(h.get('ports',[])), hc, hi, hv, ht]
+        ws2.append(row)
+        f = row_fill(i)
+        for j, cell in enumerate(ws2[i], 1):
+            cell.fill = f
+            cell.alignment = Alignment(vertical='center')
+            if j==1: cell.font = cell_font(C_ACCENT, bold=True)
+            elif j==8 and hc: cell.font = cell_font(C_CRIT, bold=True)
+            elif j==9 and hi: cell.font = cell_font(C_HIGH)
+            elif j==10 and hv: cell.font = cell_font(C_MED)
+            else: cell.font = cell_font(C_MUTED if j>3 else C_TEXT)
+        ws2.row_dimensions[i].height = 16
+
+    # ── Sheet 3: Ports ───────────────────────────────────────────────────────
+    ws3 = wb.create_sheet('Ports')
+    ws3.sheet_properties.tabColor = '3FB950'
+    cols3 = ['Host IP','Port','Protocol','Classification','Service Name','Product','Version','Extra Info','Note']
+    wids3 = [18,8,10,14,18,24,20,24,50]
+    write_header(ws3, cols3, wids3)
+    row_i = 2
+    cls_order = {'critical':0,'interesting':1,'normal':2}
+    all_ports = []
+    for h in hosts:
+        for p in h.get('ports',[]):
+            all_ports.append((h.get('ip',''), p))
+    all_ports.sort(key=lambda x: (cls_order.get(x[1]['classification'],2), x[0], x[1]['portid']))
+    for ip, p in all_ports:
+        svc = p.get('service',{})
+        cls = p.get('classification','normal')
+        row = [ip, p['portid'], p['protocol'], cls.upper(),
+               svc.get('name',''), svc.get('product',''), svc.get('version',''), svc.get('extrainfo',''),
+               p.get('class_reason','')]
+        ws3.append(row)
+        f = row_fill(row_i)
+        for j, cell in enumerate(ws3[row_i], 1):
+            cell.fill = f
+            cell.alignment = Alignment(vertical='center', wrap_text=(j==9))
+            if j==1: cell.font = cell_font(C_ACCENT, bold=True)
+            elif j==4:
+                col = {C_CRIT:'critical',C_HIGH:'interesting'}.get
+                c = C_CRIT if cls=='critical' else C_HIGH if cls=='interesting' else C_LOW
+                cell.font = cell_font(c, bold=True)
+            else: cell.font = cell_font(C_MUTED if j>5 else C_TEXT)
+        ws3.row_dimensions[row_i].height = 16
+        row_i += 1
+
+    # ── Sheet 4: Findings ────────────────────────────────────────────────────
+    ws4 = wb.create_sheet('Findings')
+    ws4.sheet_properties.tabColor = C_CRIT[2:]
+    cols4 = ['Host IP','Severity','Title','CVE','Port','Description','Source']
+    wids4 = [18,12,40,20,8,60,22]
+    write_header(ws4, cols4, wids4)
+    row_i = 2
+    all_vulns = []
+    for h in hosts:
+        for v in h.get('vulns',[]):
+            all_vulns.append((h.get('ip',''), v))
+    all_vulns.sort(key=lambda x: (sev_order.get(x[1].get('severity','INFO'),9), x[0]))
+    for ip, v in all_vulns:
+        row = [ip, v.get('severity',''), v.get('title',''), v.get('cve','N/A'),
+               v.get('port',''), v.get('description',''), v.get('script','')]
+        ws4.append(row)
+        f = row_fill(row_i)
+        sev_col = sev_colors.get(v.get('severity','INFO'), C_MUTED)
+        for j, cell in enumerate(ws4[row_i], 1):
+            cell.fill = f
+            cell.alignment = Alignment(vertical='center', wrap_text=(j==6))
+            if j==1: cell.font = cell_font(C_ACCENT, bold=True)
+            elif j==2: cell.font = cell_font(sev_col, bold=True)
+            elif j==3: cell.font = cell_font(C_TEXT, bold=True)
+            else: cell.font = cell_font(C_MUTED)
+        ws4.row_dimensions[row_i].height = 16 if len(v.get('description',''))<80 else 28
+        row_i += 1
+
+    # ── Sheet 5: Investigation Actions (TODOs) ───────────────────────────────
+    ws5 = wb.create_sheet('Investigation Actions')
+    ws5.sheet_properties.tabColor = C_MED[2:]
+    cols5 = ['Host IP','Priority','Port','Title','Reason','Description','Follow-up Scan']
+    wids5 = [18,10,8,38,40,55,70]
+    write_header(ws5, cols5, wids5)
+    row_i = 2
+    for h in hosts:
+        for t in h.get('todos',[]):
+            row = [h.get('ip',''), t.get('priority','').upper(), t.get('port',''),
+                   t.get('title',''), t.get('reason',''), t.get('description',''), t.get('followup','')]
+            ws5.append(row)
+            f = row_fill(row_i)
+            pri_col = C_HIGH if t.get('priority')=='high' else C_MED
+            for j, cell in enumerate(ws5[row_i], 1):
+                cell.fill = f
+                cell.alignment = Alignment(vertical='center', wrap_text=(j in (5,6,7)))
+                if j==1: cell.font = cell_font(C_ACCENT, bold=True)
+                elif j==2: cell.font = cell_font(pri_col, bold=True)
+                elif j==7: cell.font = cell_font(C_INFO, size=9)
+                else: cell.font = cell_font(C_TEXT if j<5 else C_MUTED)
+            ws5.row_dimensions[row_i].height = 16
+            row_i += 1
+
+    buf = __import__('io').BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
 def generate_pdf_report(scan, meta):
+    """Clean, professional light-background executive summary PDF."""
     from fpdf import FPDF, XPos, YPos
 
     ts    = _pdf_safe(meta.get('timestamp_display', 'N/A'))
@@ -769,234 +961,257 @@ def generate_pdf_report(scan, meta):
     crit_vulns  = sum(len([v for v in h.get('vulns',[]) if v['severity']=='CRITICAL']) for h in hosts)
     high_vulns  = sum(len([v for v in h.get('vulns',[]) if v['severity']=='HIGH']) for h in hosts)
     med_vulns   = sum(len([v for v in h.get('vulns',[]) if v['severity']=='MEDIUM']) for h in hosts)
+    low_vulns   = sum(len([v for v in h.get('vulns',[]) if v['severity']=='LOW']) for h in hosts)
+    total_todos = sum(len(h.get('todos',[])) for h in hosts)
 
-    # Risk score (simple: 10×CRITICAL + 5×HIGH + 2×MEDIUM + crit_ports×3)
-    risk_score  = crit_vulns * 10 + high_vulns * 5 + med_vulns * 2 + crit_ports * 3
-    if risk_score == 0:   risk_label = "LOW"
-    elif risk_score < 20: risk_label = "MEDIUM"
-    elif risk_score < 60: risk_label = "HIGH"
-    else:                 risk_label = "CRITICAL"
+    risk_score = crit_vulns*10 + high_vulns*5 + med_vulns*2 + crit_ports*3
+    risk_label = 'CRITICAL' if risk_score>=60 else 'HIGH' if risk_score>=20 else 'MEDIUM' if risk_score>0 else 'LOW'
 
-    risk_colors = {"LOW":(63,185,80), "MEDIUM":(224,122,48), "HIGH":(248,81,73), "CRITICAL":(124,58,237)}
-    sev_colors  = {"CRITICAL":(124,58,237), "HIGH":(248,81,73), "MEDIUM":(224,122,48),
-                   "LOW":(63,185,80), "INFO":(77,157,224)}
+    # Colours (RGB) for light background PDF
+    COL_BLACK   = (30,  30,  40)
+    COL_GRAY    = (100, 110, 120)
+    COL_LGRAY   = (180, 190, 200)
+    COL_LINE    = (220, 228, 236)
+    COL_BG      = (248, 250, 252)
+    COL_ACCENT  = (44,  105, 190)
+    COL_CRIT    = (100, 40,  200)
+    COL_HIGH    = (220, 55,  55)
+    COL_MED     = (210, 105, 30)
+    COL_LOW     = (40,  160, 70)
+    COL_INFO    = (44,  105, 190)
+    RISK_COL    = {'LOW':COL_LOW,'MEDIUM':COL_MED,'HIGH':COL_HIGH,'CRITICAL':COL_CRIT}
+    SEV_COL     = {'CRITICAL':COL_CRIT,'HIGH':COL_HIGH,'MEDIUM':COL_MED,'LOW':COL_LOW,'INFO':COL_INFO}
 
-    pdf = FPDF()
-    pdf.set_auto_page_break(auto=True, margin=18)
-    pdf.set_margins(18, 18, 18)
+    pdf = FPDF(orientation='P', unit='mm', format='A4')
+    pdf.set_auto_page_break(auto=True, margin=20)
+    pdf.set_margins(18, 15, 18)
 
-    # ── COVER PAGE ────────────────────────────────────────────────────────
-    pdf.add_page()
-    pdf.set_fill_color(13, 17, 23)
-    pdf.rect(0, 0, 210, 297, 'F')
+    def new_page():
+        pdf.add_page()
+        pdf.set_fill_color(255,255,255)
+        pdf.rect(0,0,210,297,'F')
 
-    # Header bar
-    pdf.set_fill_color(22, 27, 34)
-    pdf.rect(0, 0, 210, 50, 'F')
+    def section_title(title):
+        pdf.ln(4)
+        pdf.set_font('Helvetica','B',11)
+        pdf.set_text_color(*COL_ACCENT)
+        pdf.set_fill_color(*COL_BG)
+        pdf.cell(0,8,' '+title,fill=True,new_x=XPos.LEFT,new_y=YPos.NEXT)
+        pdf.set_draw_color(*COL_ACCENT)
+        pdf.line(18, pdf.get_y(), 192, pdf.get_y())
+        pdf.ln(3)
+        pdf.set_text_color(*COL_BLACK)
 
-    pdf.set_text_color(88, 166, 255)
-    pdf.set_font("Helvetica", "B", 28)
+    def footer():
+        pdf.set_y(-14)
+        pdf.set_font('Helvetica','',7)
+        pdf.set_text_color(*COL_LGRAY)
+        pdf.cell(0,5,f'NmapViz Report  |  {ts}  |  Confidential  |  Page {pdf.page_no()}',align='C')
+
+    # ── PAGE 1: COVER ────────────────────────────────────────────────────────
+    new_page()
+
+    # Top accent bar
+    pdf.set_fill_color(*COL_ACCENT)
+    pdf.rect(0,0,210,4,'F')
+
+    # Logo area
     pdf.set_xy(18, 14)
-    pdf.cell(0, 12, "NMAPVIZ", new_x=XPos.LEFT, new_y=YPos.NEXT)
-    pdf.set_font("Helvetica", "", 10)
-    pdf.set_text_color(139, 148, 158)
-    pdf.set_xy(18, 28)
-    pdf.cell(0, 6, "Network Security Scan: Executive Summary Report")
+    pdf.set_font('Helvetica','B',26)
+    pdf.set_text_color(*COL_ACCENT)
+    pdf.cell(0,12,'NmapViz',new_x=XPos.LEFT,new_y=YPos.NEXT)
+    pdf.set_xy(18,26)
+    pdf.set_font('Helvetica','',10)
+    pdf.set_text_color(*COL_GRAY)
+    pdf.cell(0,6,'Network Security Scan  |  Executive Summary',new_x=XPos.LEFT,new_y=YPos.NEXT)
 
-    # Risk badge
-    rc = risk_colors[risk_label]
+    # Risk badge (top right)
+    rc = RISK_COL[risk_label]
     pdf.set_fill_color(*rc)
-    pdf.set_xy(148, 12)
-    pdf.set_font("Helvetica", "B", 10)
-    pdf.set_text_color(13, 17, 23)
-    pdf.cell(44, 10, f"RISK: {risk_label}", align="C", fill=True)
+    pdf.set_text_color(255,255,255)
+    pdf.set_font('Helvetica','B',12)
+    pdf.set_xy(145,14)
+    pdf.cell(47,14,f' RISK: {risk_label} ',align='C',fill=True)
 
     # Divider
-    pdf.set_draw_color(48, 54, 61)
-    pdf.set_xy(18, 54)
-    pdf.line(18, 54, 192, 54)
+    pdf.set_draw_color(*COL_LINE)
+    pdf.line(18,40,192,40)
 
-    # Scan metadata
-    pdf.set_font("Helvetica", "", 9)
-    pdf.set_text_color(139, 148, 158)
-    pdf.set_xy(18, 58)
-    pdf.multi_cell(0, 6, f"Report Date: {ts}\nSource Files: {files}\nCommand: {_pdf_safe(scan.get('args','N/A'))[:120]}\n"
-                         f"Version Detection: {'Yes (-sV)' if scan.get('has_version') else 'No (basic scan)'} | "
-                         f"NSE Scripts: {'Yes' if scan.get('has_scripts') else 'No'}")
+    # Metadata block
+    pdf.set_xy(18,44)
+    pdf.set_font('Helvetica','',9)
+    for label,value in [
+        ('Date:', ts),
+        ('Source files:', files),
+        ('Command:', _pdf_safe(scan.get('args','N/A'))[:100]),
+        ('Version detection:', 'Yes (-sV)' if scan.get('has_version') else 'No (basic scan)'),
+        ('NSE Scripts:', 'Yes' if scan.get('has_scripts') else 'No'),
+    ]:
+        pdf.set_text_color(*COL_GRAY)
+        pdf.cell(38,5.5,label)
+        pdf.set_text_color(*COL_BLACK)
+        pdf.cell(0,5.5,value,new_x=XPos.LEFT,new_y=YPos.NEXT)
+    pdf.ln(4)
 
-    # Stats grid
-    pdf.set_xy(18, 100)
+    # Stats grid (2x3)
+    pdf.line(18, pdf.get_y(), 192, pdf.get_y())
+    pdf.ln(3)
     stats = [
-        ("Active Hosts",    str(total_hosts),  (88,166,255)),
-        ("Open Ports",      str(total_ports),  (88,166,255)),
-        ("Critical Ports",  str(crit_ports),   (248,81,73)),
-        ("Interesting Ports",str(inter_ports), (217,134,52)),
-        ("Vulnerabilities", str(total_vulns),  (188,140,255)),
-        ("Critical Findings",str(crit_vulns),  (248,81,73)),
+        ('Active Hosts',        str(total_hosts),  COL_ACCENT),
+        ('Open Ports',          str(total_ports),  COL_ACCENT),
+        ('Critical Ports',      str(crit_ports),   COL_CRIT),
+        ('Interesting Ports',   str(inter_ports),  COL_MED),
+        ('Total Findings',      str(total_vulns),  COL_HIGH),
+        ('Investigation Actions',str(total_todos), COL_MED),
     ]
-    col_w = (192 - 18) / 3
-    for i, (label, value, color) in enumerate(stats):
-        col = i % 3
-        row = i // 3
-        x = 18 + col * col_w
-        y = 100 + row * 28
-        pdf.set_fill_color(22, 27, 34)
-        pdf.set_draw_color(48, 54, 61)
-        pdf.rect(x, y, col_w - 4, 24, 'DF')
-        pdf.set_xy(x + 4, y + 3)
-        pdf.set_font("Helvetica", "B", 16)
-        pdf.set_text_color(*color)
-        pdf.cell(col_w - 12, 9, value)
-        pdf.set_xy(x + 4, y + 13)
-        pdf.set_font("Helvetica", "", 8)
-        pdf.set_text_color(139, 148, 158)
-        pdf.cell(col_w - 12, 5, label.upper())
+    col_w = 58
+    for i,(label,val,col) in enumerate(stats):
+        c = i%3; r = i//3
+        x = 18 + c*col_w; y = pdf.get_y() + r*22
+        pdf.set_fill_color(*COL_BG)
+        pdf.rect(x, y, col_w-3, 19,'F')
+        pdf.set_xy(x+4, y+2)
+        pdf.set_font('Helvetica','B',18)
+        pdf.set_text_color(*col)
+        pdf.cell(col_w-10,9,val)
+        pdf.set_xy(x+4, y+11)
+        pdf.set_font('Helvetica','',8)
+        pdf.set_text_color(*COL_GRAY)
+        pdf.cell(col_w-10,5,label.upper())
+    pdf.ln(48)
 
-    # Vulnerability severity breakdown
-    pdf.set_xy(18, 164)
-    pdf.set_font("Helvetica", "B", 11)
-    pdf.set_text_color(88, 166, 255)
-    pdf.cell(0, 8, "VULNERABILITY BREAKDOWN BY SEVERITY")
-    pdf.set_xy(18, 174)
-    sev_data = [("CRITICAL", crit_vulns, (248,81,73)), ("HIGH", high_vulns, (217,134,52)),
-                ("MEDIUM", med_vulns, (210,153,34)), ("LOW+INFO", total_vulns-crit_vulns-high_vulns-med_vulns, (100,100,100))]
-    bar_total = total_vulns or 1
-    bar_w = 174
-    for label, count, color in sev_data:
-        pdf.set_xy(18, pdf.get_y())
-        pdf.set_font("Helvetica", "", 9)
-        pdf.set_text_color(139, 148, 158)
-        pdf.cell(26, 6, label)
-        pdf.cell(14, 6, str(count), align="R")
-        bar_len = max(int((count / bar_total) * bar_w), 0)
+    # Severity breakdown bar chart
+    section_title('FINDING SEVERITY BREAKDOWN')
+    sev_data = [('CRITICAL',crit_vulns,COL_CRIT),('HIGH',high_vulns,COL_HIGH),
+                ('MEDIUM',med_vulns,COL_MED),('LOW',low_vulns,COL_LOW)]
+    bar_max = max(1, total_vulns)
+    bar_area = 120
+    for label,count,col in sev_data:
+        pdf.set_font('Helvetica','B',9)
+        pdf.set_text_color(*col)
+        pdf.cell(24,6,label)
+        pdf.set_text_color(*COL_BLACK)
+        pdf.set_font('Helvetica','',9)
+        pdf.cell(10,6,str(count),align='R')
+        bar_len = int((count/bar_max)*bar_area)
         if bar_len > 0:
-            pdf.set_fill_color(*color)
-            pdf.rect(pdf.get_x() + 2, pdf.get_y() + 1, bar_len, 4, 'F')
+            pdf.set_fill_color(*col)
+            pdf.rect(pdf.get_x()+3, pdf.get_y()+1.5, bar_len, 3.5,'F')
         pdf.ln(7)
 
-    # Footer
-    pdf.set_xy(18, 275)
-    pdf.set_font("Helvetica", "", 8)
-    pdf.set_text_color(48, 54, 61)
-    pdf.cell(0, 5, "NmapViz Executive Summary | Confidential | For authorised use only", align="C")
+    footer()
 
-    # ── PAGE 2: TOP FINDINGS ──────────────────────────────────────────────
-    pdf.add_page()
-    pdf.set_fill_color(13, 17, 23)
-    pdf.rect(0, 0, 210, 297, 'F')
-
-    pdf.set_xy(18, 18)
-    pdf.set_font("Helvetica", "B", 13)
-    pdf.set_text_color(88, 166, 255)
-    pdf.cell(0, 8, "TOP FINDINGS: CRITICAL AND HIGH SEVERITY")
-    pdf.ln(10)
+    # ── PAGE 2: TOP CRITICAL AND HIGH FINDINGS ───────────────────────────────
+    new_page()
+    pdf.set_fill_color(*COL_ACCENT)
+    pdf.rect(0,0,210,4,'F')
+    section_title('TOP CRITICAL AND HIGH SEVERITY FINDINGS')
 
     all_vulns = []
     for h in hosts:
-        for v in h.get('vulns', []):
-            if v['severity'] in ('CRITICAL', 'HIGH'):
-                all_vulns.append({**v, 'host_ip': h['ip']})
+        for v in h.get('vulns',[]):
+            if v['severity'] in ('CRITICAL','HIGH'):
+                all_vulns.append({**v,'host_ip':h['ip']})
     sev_order = {'CRITICAL':0,'HIGH':1,'MEDIUM':2,'LOW':3,'INFO':4}
-    all_vulns.sort(key=lambda x: sev_order.get(x['severity'], 9))
+    all_vulns.sort(key=lambda x: sev_order.get(x['severity'],9))
 
     if not all_vulns:
-        pdf.set_font("Helvetica", "", 10)
-        pdf.set_text_color(63, 185, 80)
-        pdf.set_xy(18, pdf.get_y())
-        pdf.cell(0, 8, "No Critical or High severity findings detected.")
+        pdf.set_font('Helvetica','',10)
+        pdf.set_text_color(*COL_LOW)
+        pdf.cell(0,8,'No Critical or High severity findings detected.')
     else:
-        for v in all_vulns[:20]:
-            if pdf.get_y() > 260:
-                pdf.add_page()
-                pdf.set_fill_color(13, 17, 23)
-                pdf.rect(0, 0, 210, 297, 'F')
-                pdf.set_xy(18, 18)
+        for v in all_vulns[:22]:
+            if pdf.get_y() > 265:
+                new_page()
+                pdf.set_fill_color(*COL_ACCENT)
+                pdf.rect(0,0,210,4,'F')
+                section_title('TOP FINDINGS (continued)')
             y0 = pdf.get_y()
-            sc = sev_colors.get(v['severity'], (100,100,100))
+            sc = SEV_COL.get(v['severity'],COL_GRAY)
             pdf.set_fill_color(*sc)
-            pdf.rect(18, y0, 3, 16, 'F')
-            pdf.set_xy(24, y0 + 1)
-            pdf.set_font("Helvetica", "B", 9)
+            pdf.rect(18,y0,3,15,'F')
+            pdf.set_xy(23,y0)
+            pdf.set_font('Helvetica','B',9)
             pdf.set_text_color(*sc)
-            pdf.cell(22, 5, v['severity'])
-            pdf.set_text_color(230, 237, 243)
-            pdf.cell(0, 5, _pdf_safe(v['title'])[:80])
-            pdf.set_xy(24, y0 + 7)
-            pdf.set_font("Helvetica", "", 8)
-            pdf.set_text_color(139, 148, 158)
-            pdf.cell(0, 5, _pdf_safe(f"Host: {v['host_ip']}  Port: {v['port']}  CVE: {v.get('cve','N/A')}"))
-            pdf.set_xy(24, y0 + 12)
-            pdf.set_text_color(100, 110, 120)
-            pdf.set_font("Helvetica", "", 7)
-            desc = _pdf_safe(v['description'])[:120] + ('...' if len(_pdf_safe(v['description'])) > 120 else '')
-            pdf.cell(0, 4, desc)
+            pdf.cell(22,5,v['severity'])
+            pdf.set_text_color(*COL_BLACK)
+            pdf.cell(0,5,_pdf_safe(v['title'])[:80])
+            pdf.set_xy(23,y0+6)
+            pdf.set_font('Helvetica','',8)
+            pdf.set_text_color(*COL_GRAY)
+            pdf.cell(0,5,_pdf_safe(f"Host: {v['host_ip']}   Port: {v['port']}   CVE: {v.get('cve','N/A')}"))
+            pdf.set_xy(23,y0+11)
+            pdf.set_text_color(*COL_GRAY)
+            pdf.set_font('Helvetica','',7)
+            desc = _pdf_safe(v['description'])[:130]
+            pdf.cell(0,4,desc)
             pdf.ln(18)
+            pdf.set_draw_color(*COL_LINE)
+            pdf.line(23,pdf.get_y()-2,192,pdf.get_y()-2)
 
-    # ── PAGE 3+: HOST SUMMARY TABLE ───────────────────────────────────────
-    pdf.add_page()
-    pdf.set_fill_color(13, 17, 23)
-    pdf.rect(0, 0, 210, 297, 'F')
-    pdf.set_xy(18, 18)
-    pdf.set_font("Helvetica", "B", 13)
-    pdf.set_text_color(88, 166, 255)
-    pdf.cell(0, 8, "HOST SUMMARY")
-    pdf.ln(10)
+    footer()
 
-    # Table header
-    col_widths = [36, 46, 20, 22, 22, 24]
-    headers    = ["IP Address", "OS", "Ports", "Critical", "Interesting", "Vulns"]
-    pdf.set_fill_color(22, 27, 34)
-    for i, (h, w) in enumerate(zip(headers, col_widths)):
-        pdf.set_xy(18 + sum(col_widths[:i]), pdf.get_y())
-        pdf.set_font("Helvetica", "B", 8)
-        pdf.set_text_color(139, 148, 158)
-        pdf.cell(w, 6, h.upper(), fill=True)
+    # ── PAGE 3+: HOST SUMMARY ────────────────────────────────────────────────
+    new_page()
+    pdf.set_fill_color(*COL_ACCENT)
+    pdf.rect(0,0,210,4,'F')
+    section_title('HOST SUMMARY TABLE')
+
+    col_w2   = [34,48,16,18,20,18,20]
+    headers2 = ['IP Address','OS','Ports','Critical','Interesting','Findings','Actions']
+    # Header row
+    pdf.set_fill_color(*COL_BG)
+    for j,(h,w) in enumerate(zip(headers2,col_w2)):
+        pdf.set_xy(18+sum(col_w2[:j]), pdf.get_y())
+        pdf.set_font('Helvetica','B',8)
+        pdf.set_text_color(*COL_GRAY)
+        pdf.cell(w,6,h,fill=True)
     pdf.ln(7)
 
-    for host in sorted(hosts, key=lambda h: [int(x) for x in h.get('ip','0.0.0.0').split('.') if x.isdigit()]):
+    for idx,host in enumerate(sorted(hosts, key=lambda h: [int(x) for x in (h.get('ip','0')+'.0.0.0').split('.')[:4]])):
         if pdf.get_y() > 265:
-            pdf.add_page()
-            pdf.set_fill_color(13, 17, 23)
-            pdf.rect(0, 0, 210, 297, 'F')
-            pdf.set_xy(18, 18)
+            new_page()
+            pdf.set_fill_color(*COL_ACCENT)
+            pdf.rect(0,0,210,4,'F')
+            section_title('HOST SUMMARY TABLE (continued)')
+            pdf.set_fill_color(*COL_BG)
+            for j,(h,w) in enumerate(zip(headers2,col_w2)):
+                pdf.set_xy(18+sum(col_w2[:j]), pdf.get_y())
+                pdf.set_font('Helvetica','B',8)
+                pdf.set_text_color(*COL_GRAY)
+                pdf.cell(w,6,h,fill=True)
+            pdf.ln(7)
+
         hc = len([p for p in host.get('ports',[]) if p['classification']=='critical'])
         hi = len([p for p in host.get('ports',[]) if p['classification']=='interesting'])
         hv = len(host.get('vulns',[]))
-        row_color = (248,81,73) if hc > 0 else (217,134,52) if hi > 0 else (63,185,80)
-        pdf.set_fill_color(*row_color)
-        pdf.rect(18, pdf.get_y(), 2, 5, 'F')
-        values = [
-            _pdf_safe(host.get('ip','?')),
-            _pdf_safe(host.get('os','Unknown') or 'Unknown')[:26],
-            str(len(host.get('ports',[]))),
-            str(hc), str(hi), str(hv)
-        ]
-        text_colors = [(230,237,243),(139,148,158),(88,166,255),(248,81,73) if hc else (100,100,100),(217,134,52) if hi else (100,100,100),(188,140,255) if hv else (100,100,100)]
-        x_start = 20
-        for j, (val, w) in enumerate(zip(values, col_widths)):
-            pdf.set_xy(x_start + sum(col_widths[:j]), pdf.get_y())
-            pdf.set_font("Helvetica", "B" if j==0 else "", 8)
-            pdf.set_text_color(*text_colors[j])
-            pdf.cell(w, 5, val)
-        pdf.ln(6)
-        # Mini port list for critical hosts
-        if hc > 0 or hv > 0:
-            pdf.set_xy(22, pdf.get_y())
-            pdf.set_font("Helvetica", "", 7)
-            pdf.set_text_color(100, 110, 120)
-            crit_list = [str(p['portid']) for p in host.get('ports',[]) if p['classification']=='critical']
-            crit_list = [_pdf_safe(x) for x in crit_list]
-            if crit_list:
-                pdf.cell(0, 4, "Critical: " + ", ".join(crit_list[:12]))
-            pdf.ln(5)
+        ht = len(host.get('todos',[]))
 
-    # Footer every page
-    pdf.set_xy(18, 282)
-    pdf.set_font("Helvetica", "", 7)
-    pdf.set_text_color(48, 54, 61)
-    pdf.cell(0, 5, f"NmapViz Report | {ts} | Confidential", align="C")
+        if idx%2==0:
+            pdf.set_fill_color(*COL_BG)
+        else:
+            pdf.set_fill_color(255,255,255)
+
+        row_vals  = [_pdf_safe(host.get('ip','?')), _pdf_safe((host.get('os','Unknown') or 'Unknown'))[:28],
+                     str(len(host.get('ports',[]))), str(hc) if hc else '', str(hi) if hi else '',
+                     str(hv) if hv else '', str(ht) if ht else '']
+        row_cols  = [COL_ACCENT, COL_GRAY, COL_BLACK,
+                     COL_CRIT if hc else COL_LGRAY, COL_HIGH if hi else COL_LGRAY,
+                     COL_MED if hv else COL_LGRAY, COL_MED if ht else COL_LGRAY]
+        row_bold  = [True,False,False,bool(hc),bool(hi),bool(hv),bool(ht)]
+
+        for j,(val,w) in enumerate(zip(row_vals,col_w2)):
+            pdf.set_xy(18+sum(col_w2[:j]), pdf.get_y())
+            pdf.set_font('Helvetica','B' if row_bold[j] else '',8)
+            pdf.set_text_color(*row_cols[j])
+            pdf.cell(w,5.5,val,fill=True)
+        pdf.ln(6)
+
+    footer()
 
     return bytes(pdf.output())
+
+
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1081,8 +1296,15 @@ def download_report(scan_id, fmt):
                 headers={"Content-Disposition": f"attachment; filename=nmapviz_{scan_id}.pdf"})
         except Exception as e:
             return jsonify({"error": f"PDF generation failed: {str(e)}"}), 500
+    elif fmt == 'xlsx':
+        try:
+            xlsx_bytes = generate_xlsx_report(scan, meta)
+            return Response(xlsx_bytes, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                headers={"Content-Disposition": f"attachment; filename=nmapviz_{scan_id}.xlsx"})
+        except Exception as e:
+            return jsonify({"error": f"XLSX generation failed: {str(e)}"}), 500
     else:
-        return jsonify({"error": "Unknown format. Use: json, html, markdown, pdf"}), 400
+        return jsonify({"error": "Unknown format. Use: json, html, markdown, pdf, xlsx"}), 400
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=12221, debug=False)

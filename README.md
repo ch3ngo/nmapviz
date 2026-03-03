@@ -4,16 +4,19 @@
 
 # NmapViz
 
-**A BloodHound-style graphical visualizer for nmap scan results**
+**A graphical visualizer for nmap scan results**
 
 [![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white)](https://hub.docker.com)
 [![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)](https://python.org)
 [![Flask](https://img.shields.io/badge/Flask-3.x-000000?logo=flask&logoColor=white)](https://flask.palletsprojects.com)
-[![Port](https://img.shields.io/badge/Port-12221-58A6FF)](#)
 
 Drop your nmap XML files in. Instantly see your network as an interactive node graph with automatic vulnerability detection, subnet clustering, and exportable reports.
 
 </div>
+
+⚠️ **Disclaimer**
+This project is a work in progress, built hand-in-hand with Claude Code. To be honest, Claude did most of the heavy lifting while I provided moral support. If it breaks, blame the bot, but if it’s brilliant, I’ll take the credit.
+_Got a better way to do this? Reach out and let me know!_
 
 ---
 
@@ -35,31 +38,27 @@ Drop your nmap XML files in. Instantly see your network as an interactive node g
 
 ## 📸 Screenshots
 
-> Add screenshots to `docs/screenshots/` after running the app.
-
 ### Upload Screen
-![Upload screen](docs/screenshots/01_upload.png)
+![Upload Screen](docs/screenshots/01_upload.png)
 *Multi-file drag-and-drop upload. Supports merging multiple XML files from different scans or subnets.*
 
-### Interactive Graph
+### Interactive Graph with Port Details
 ![Graph view](docs/screenshots/02_graph.png)
-*BloodHound-style node graph. Nodes are colour-coded by risk level. Subnet clusters collapse large networks into manageable groups — double-click to expand.*
+*BloodHound-style node graph. Nodes are colour-coded by risk level. Subnet clusters collapse large networks into manageable groups. Double-click to expand.*
 
-### Port Details
-![Port details sidebar](docs/screenshots/03_ports.png)
 *Left sidebar showing all open ports for a selected host, sorted by severity. Critical and interesting ports are highlighted with explanations.*
 
 ### Vulnerability Panel
-![Vulnerability panel](docs/screenshots/04_vulns.png)
+![Vulnerability panel](docs/screenshots/03_vulns.png)
 *Detected vulnerabilities sorted by severity (CRITICAL → HIGH → MEDIUM → LOW). Includes CVE references and the detection source (NSE script or version analysis).*
 
 ### Scan History & Export
-![History and export](docs/screenshots/05_history.png)
+![History and export](docs/screenshots/04_history.png)
 *Persistent scan history with one-click reload. Export any scan as JSON, HTML report, or Markdown for pentest documentation.*
 
 ---
 
-## 🚀 Quick Start (Docker — Recommended)
+## 🚀 Quick Start (Docker is the Recommended)
 
 ### Requirements
 - [Docker Desktop](https://docs.docker.com/get-docker/) installed and running
@@ -69,15 +68,14 @@ Drop your nmap XML files in. Instantly see your network as an interactive node g
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/YOUR_USERNAME/nmap-visualizer.git
-cd nmap-visualizer
+git clone https://github.com/ch3ngo/nmapviz.git
+cd nmapviz
 
 # 2. Build and start
 docker compose up --build -d
 
 # 3. Open in browser
-open http://localhost:12221   # macOS
-# or just navigate to http://localhost:12221
+open http://localhost:12221
 ```
 
 ### Useful Docker commands
@@ -104,15 +102,15 @@ If you prefer not to use Docker:
 
 ```bash
 # 1. Clone
-git clone https://github.com/YOUR_USERNAME/nmap-visualizer.git
-cd nmap-visualizer
+git clone https://github.com/ch3ngo/nmapviz.git
+cd nmapviz
 
 # 2. Create virtual environment
 python3 -m venv venv
 
-# Activate — Linux/macOS:
+# Activate Linux/macOS:
 source venv/bin/activate
-# Activate — Windows:
+# Activate Windows:
 venv\Scripts\activate
 
 # 3. Install dependencies
@@ -132,31 +130,31 @@ NmapViz reads the standard nmap XML output format (`-oX`). Here are the most use
 
 ### Basic: Just find open ports
 ```bash
-nmap -oX output.xml 192.168.1.0/24
+nmap -oX output.xml [target]
 ```
 
 ### Recommended: With version detection
 ```bash
-nmap -sV -oX output.xml 192.168.1.0/24
+nmap -sV -oX output.xml [target]
 ```
 Detects service versions, enabling vulnerability matching.
 
 ### Full: OS detection, scripts, versions
 ```bash
-nmap -A -oX output.xml 192.168.1.0/24
+nmap -A -oX output.xml [target]
 ```
 
-### Maximum coverage — with vulnerability scripts
+### Maximum coverage: With vulnerability scripts
 ```bash
-nmap -sV --script vuln -oX output.xml 192.168.1.0/24
-nmap -A --script vuln -oX output.xml 192.168.1.0/24
+nmap -sV --script vuln -oX output.xml [target]
+nmap -A --script vuln -oX output.xml [target]
 ```
 Detects EternalBlue, Heartbleed, SMB signing issues, FTP anonymous access, and many more.
 
-### Large network — fast and focused
+### Large network: Fast and focused
 ```bash
 # Scan top 150 ports at aggressive timing (great for /16 or larger)
-nmap -sV --top-ports 150 -T4 -n --open -oX fast.xml 10.0.0.0/16
+nmap -sV --top-ports 150 -T4 -n --open -oX fast.xml [target]
 
 # Merge multiple subnet scans in NmapViz:
 nmap -sV -oX scan_192.xml 192.168.1.0/24
