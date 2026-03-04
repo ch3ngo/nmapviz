@@ -1,19 +1,22 @@
 services:
   nmapviz:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: nmapviz:local
     container_name: nmapviz
     ports:
       - "12221:12221"
     restart: unless-stopped
     volumes:
-      # Opcional: persistir los uploads entre reinicios
-      - uploads_data:/app/uploads
+      - nmapviz_history:/app/history
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:12221')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:12221/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 10s
+      start_period: 15s
 
 volumes:
-  uploads_data:
+  nmapviz_history:
+    driver: local

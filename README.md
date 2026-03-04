@@ -14,9 +14,13 @@ Drop your nmap XML files in. Instantly see your network as an interactive node g
 
 </div>
 
-⚠️ **Disclaimer**
+---
+
+## ⚠️ **Disclaimer**
 This project is a work in progress, built hand-in-hand with Claude Code. To be honest, Claude did most of the heavy lifting while I provided moral support. If it breaks, blame the bot, but if it’s brilliant, I’ll take the credit.
 _Got a better way to do this? Reach out and let me know!_
+
+NmapViz is intended for **authorised security assessments only**. Always obtain written permission before scanning any network you do not own. The authors accept no responsibility for misuse.
 
 ---
 
@@ -39,22 +43,23 @@ _Got a better way to do this? Reach out and let me know!_
 ## 📸 Screenshots
 
 ### Upload Screen
-![Upload Screen](docs/screenshots/01_upload.png)
+![Upload Screen](docs/screenshots/01_uploadnmap.png)
 *Multi-file drag-and-drop upload. Supports merging multiple XML files from different scans or subnets.*
 
 ### Interactive Graph with Port Details
-![Graph view](docs/screenshots/02_graph.png)
+![Graph view](docs/screenshots/02_graphports.png)
 *BloodHound-style node graph. Nodes are colour-coded by risk level. Subnet clusters collapse large networks into manageable groups. Double-click to expand.*
 
 *Left sidebar showing all open ports for a selected host, sorted by severity. Critical and interesting ports are highlighted with explanations.*
 
 ### Vulnerability Panel
-![Vulnerability panel](docs/screenshots/03_vulns.png)
+![Vulnerability panel](docs/screenshots/03_vuln.png)
 *Detected vulnerabilities sorted by severity (CRITICAL → HIGH → MEDIUM → LOW). Includes CVE references and the detection source (NSE script or version analysis).*
 
 ### Scan History & Export
-![History and export](docs/screenshots/04_history.png)
-*Persistent scan history with one-click reload. Export any scan as JSON, HTML report, or Markdown for pentest documentation.*
+![History and export](docs/screenshots/04_history.png)  
+
+*Persistent scan history with one-click reload. Export any scan as JSON, HTML report, Excel, or Markdown for pentest documentation.*
 
 ---
 
@@ -199,12 +204,6 @@ Pull requests are welcome. For major changes, open an issue first.
 3. Commit: `git commit -m 'feat: add my feature'`
 4. Push: `git push origin feat/my-feature`
 5. Open a pull request
-
----
-
-## ⚠️ Disclaimer
-
-NmapViz is intended for **authorised security assessments only**. Always obtain written permission before scanning any network you do not own. The authors accept no responsibility for misuse.
 
 ---
 

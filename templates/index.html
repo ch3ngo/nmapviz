@@ -66,7 +66,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-body);font-si
 #upload-zone{flex:1;display:none;flex-direction:column;overflow:hidden;z-index:1}
 #upload-zone.active{display:flex}
 .upload-topbar{display:flex;align-items:center;gap:14px;padding:0 18px;background:var(--surface);border-bottom:1px solid var(--border);height:52px;flex-shrink:0;box-shadow:0 1px 12px rgba(0,0,0,.4)}
-.upload-content{flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;padding:40px;position:relative}
+.upload-content{flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;padding:40px;position:relative;overflow-y:auto;min-height:0}
 .drop-area{border:1px solid var(--border2);border-radius:12px;padding:48px 64px;text-align:center;cursor:pointer;transition:all .2s;max-width:580px;width:100%;background:var(--surface);box-shadow:0 4px 32px rgba(0,0,0,.4);position:relative}
 .drop-area::before,.drop-area::after{content:'';position:absolute;width:16px;height:16px;border-color:var(--accent);border-style:solid}
 .drop-area::before{top:-1px;left:-1px;border-width:2px 0 0 2px;border-radius:12px 0 0 0}
@@ -182,7 +182,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-body);font-si
 .graph-ctrl{position:absolute;top:12px;right:12px;display:flex;gap:6px}
 .ctrl-btn{background:rgba(22,27,34,.94);border:1px solid var(--border);color:var(--muted);padding:7px 14px;border-radius:6px;font-size:12px;cursor:pointer;font-family:var(--font-body);font-weight:500;transition:all .15s;backdrop-filter:blur(4px)}
 .ctrl-btn:hover{border-color:var(--accent);color:var(--accent)}
-.scan-info-overlay{position:absolute;bottom:12px;right:12px;background:rgba(22,27,34,.92);border:1px solid var(--border);border-radius:8px;padding:9px 14px;font-size:12px;color:var(--muted);max-width:380px;backdrop-filter:blur(4px)}
+.scan-info-overlay{position:absolute;bottom:12px;right:12px;background:rgba(22,27,34,.92);border:1px solid var(--border);border-radius:8px;padding:9px 14px;font-size:12px;color:var(--muted);max-width:450px;backdrop-filter:blur(4px)}
 .scan-info-overlay .cmd{color:var(--accent);font-size:11px;word-break:break-all;margin-top:3px;font-family:var(--font-mono)}
 
 /* HISTORY PANEL */
@@ -274,13 +274,13 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-body);font-si
 .footer-link svg{flex-shrink:0}
 .footer-right{margin-left:auto;font-size:11px;color:var(--dim)}
 
-/* TODO PANEL */
-.todo-card{border:1px solid rgba(77,157,224,.2);border-left:3px solid var(--si);background:rgba(77,157,224,.03);padding:10px 12px;margin-bottom:7px;border-radius:5px}
-.todo-card.priority-high{border-left-color:var(--sh);border-color:rgba(248,81,73,.2);background:rgba(248,81,73,.03)}
+/* TODO / ACTIONS PANEL */
+.todo-card{border:1px solid rgba(77,157,224,.2);border-left:3px solid var(--sm);background:rgba(224,122,48,.03);padding:10px 12px;margin-bottom:7px;border-radius:5px}
+.todo-card.priority-high{border-left-color:var(--sc);border-color:rgba(124,58,237,.25);background:rgba(124,58,237,.04)}
 .todo-header{display:flex;align-items:center;gap:7px;margin-bottom:4px}
 .todo-priority{font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;border:1px solid;font-family:var(--font-mono)}
-.todo-priority.high{border-color:var(--sh);color:var(--sh);background:rgba(248,81,73,.1)}
-.todo-priority.medium{border-color:var(--si);color:var(--si);background:rgba(77,157,224,.1)}
+.todo-priority.high{border-color:var(--sc);color:var(--sc);background:rgba(124,58,237,.1)}
+.todo-priority.medium{border-color:var(--sm);color:var(--sm);background:rgba(224,122,48,.1)}
 .todo-title{font-size:13px;font-weight:600;color:var(--text)}
 .todo-desc{font-size:12px;color:var(--text2);line-height:1.5;margin-bottom:5px}
 .todo-followup{background:rgba(0,0,0,.25);border:1px solid var(--border);border-left:3px solid var(--cyan);padding:6px 9px;border-radius:3px;font-size:12px;margin-top:5px}
@@ -295,6 +295,33 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-body);font-si
 .export-menu button{display:block;width:100%;text-align:left;padding:9px 16px;font-size:13px;font-family:var(--font-body);font-weight:500;color:var(--text2);background:transparent;border:none;cursor:pointer;transition:background .12s}
 .export-menu button:hover{background:rgba(77,157,224,.1);color:var(--accent)}
 .export-menu button+button{border-top:1px solid var(--border)}
+
+/* SEVERITY REFERENCE MODAL */
+#sev-ref-modal{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:300;display:none;align-items:center;justify-content:center;padding:20px}
+#sev-ref-modal.open{display:flex}
+.sev-ref-box{background:var(--surface);border:1px solid var(--border2);border-radius:12px;width:100%;max-width:680px;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 24px 80px rgba(0,0,0,.7)}
+.sev-ref-row{display:flex;gap:12px;padding:10px 14px;border-bottom:1px solid var(--border);align-items:flex-start}
+.sev-ref-row:last-child{border-bottom:none}
+.sev-ref-bar{width:4px;border-radius:2px;flex-shrink:0;margin-top:3px;align-self:stretch;min-height:40px}
+.sev-ref-content{}
+.sev-ref-label{font-size:11px;font-weight:700;font-family:var(--font-mono);margin-bottom:3px}
+.sev-ref-desc{font-size:12px;color:var(--text2);line-height:1.5}
+.sev-ref-examples{font-size:11px;color:var(--muted);margin-top:3px;font-style:italic}
+
+/* MANUAL SEVERITY OVERRIDE */
+.vuln-card{position:relative}
+.sev-override-btn{position:absolute;top:8px;right:8px;background:transparent;border:1px solid var(--border);color:var(--muted);font-size:10px;padding:2px 7px;border-radius:4px;cursor:pointer;font-family:var(--font-body);transition:all .15s;opacity:0}
+.vuln-card:hover .sev-override-btn{opacity:1}
+.sev-override-btn:hover{border-color:var(--accent);color:var(--accent)}
+.sev-select{font-size:11px;padding:3px 6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);border-radius:4px;font-family:var(--font-mono);cursor:pointer}
+
+/* QUICK WIN TL;DR */
+.tldr-box{background:rgba(63,185,80,.04);border:1px solid rgba(63,185,80,.25);border-radius:8px;padding:12px 14px;margin-bottom:12px}
+.tldr-label{font-size:11px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;display:flex;align-items:center;gap:6px}
+.tldr-desc{font-size:12px;color:var(--muted);margin-bottom:8px;line-height:1.5}
+.tldr-cmd{background:rgba(0,0,0,.3);border:1px solid var(--border);border-left:3px solid var(--green);padding:8px 12px;border-radius:4px;font-family:var(--font-mono);font-size:11px;color:var(--green);word-break:break-all;cursor:pointer;line-height:1.6}
+.tldr-cmd:hover{color:var(--accent)}
+.tldr-actions{display:flex;gap:6px;margin-top:6px}
 </style>
 </head>
 <body>
@@ -336,13 +363,14 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-body);font-si
           <circle cx="50" cy="50" r="3" fill="#4d9de0"/>
         </svg>
       </div>
-      <h2>Import nmap Scan Results</h2>
+      <h2>Import nmap scan results</h2>
       <p class="sub">Drop one or more <strong>.xml</strong> files here, or click to select</p>
-      <div class="multi-badge">✓ Multi-file supported. files will be merged automatically</div>
+      <div class="multi-badge">✓ Multi-file supported. Files will be merged automatically</div>
       <div class="drop-hint">
-        <p><code>nmap -sV -oX output.xml [target]</code> . version detection (recommended)</p>
-        <p><code>nmap -A -oX output.xml [target]</code> . aggressive: OS + scripts + versions</p>
-        <p><code>nmap -sV --script vuln -oX out.xml target</code> . vulnerability detection</p>
+        <p><code>nmap -Pn -sV -oX output.xml [target]</code> &rarr; Version Detection (Recommended)</p>
+        <p><code>nmap -Pn -A -oX output.xml [target]</code> &rarr; Aggressive: OS + Scripts + Versions</p>
+        <p><code>nmap -Pn -sV --script vuln -oX out.xml target</code> &rarr; Vulnerability detection</p>
+        <p><code>nmap -Pn -oX output.xml [target]</code> &rarr; Open port detection</p>
       </div>
     </div>
     <div class="upload-history-bar" id="upload-hist-wrap" style="display:none">
@@ -365,6 +393,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-body);font-si
     <div class="topbar-sep"></div>
     <div class="scan-badges" id="scan-badges"></div>
     <div class="topbar-right">
+      <button class="btn-icon" onclick="openActionsPanel()" title="Investigation actions">📋 Actions</button>
+      <button class="btn-icon" onclick="openSevRef()" title="Severity classification guide">⚖️ Severity</button>
       <button class="btn-icon" onclick="openHelp()">📖 Reference</button>
       <button class="btn-icon" onclick="openHistory()">🕑 History</button>
       <div class="export-dropdown" id="export-dropdown">
@@ -397,7 +427,6 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-body);font-si
         <button class="tab-btn active" onclick="switchTab('hosts')">🖥 Hosts</button>
         <button class="tab-btn" onclick="switchTab('ports')">🔌 Ports</button>
         <button class="tab-btn" onclick="switchTab('vulns')">⚠️ Vulns</button>
-        <button class="tab-btn" onclick="openActionsPanel()">📋 Actions</button>
       </div>
       <div class="tab-content active" id="tab-hosts"><div id="host-list"></div></div>
       <div class="tab-content" id="tab-ports"><div id="detail-panel"><p class="empty-state">Select a host to view ports</p></div></div>
@@ -418,11 +447,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-body);font-si
         <div class="graph-legend">
           <div class="legend-title">Node Legend</div>
           <div class="legend-row"><div class="legend-dot" style="background:#1f3a52;border-color:#4d9de0"></div>Scanner</div>
-          <div class="legend-row"><div class="legend-dot" style="background:#4d9de018;border-color:#4d9de0"></div>Subnet cluster (dbl-click)</div>
-          <div class="legend-row"><div class="legend-dot" style="background:#3fb95015;border-color:#3fb950"></div>Host. no findings</div>
-          <div class="legend-row"><div class="legend-dot" style="background:#f8514918;border-color:#f85149"></div>Host. interesting ports</div>
-          <div class="legend-row"><div class="legend-dot" style="background:#7c3aed18;border-color:#7c3aed"></div>Host. critical ports</div>
-          <div class="legend-row"><div class="legend-dot" style="background:#e07a3018;border-color:#e07a30"></div>Host. vulnerabilities</div>
+          <div class="legend-row"><div class="legend-dot" style="background:#4d9de018;border-color:#4d9de0"></div>Subnet cluster</div>
+          <div class="legend-row"><div class="legend-dot" style="background:#3fb95015;border-color:#3fb950"></div>Host &rarr; No findings</div>
+          <div class="legend-row"><div class="legend-dot" style="background:#f8514918;border-color:#f85149"></div>Host &rarr; Interesting ports</div>
+          <div class="legend-row"><div class="legend-dot" style="background:#7c3aed18;border-color:#7c3aed"></div>Host &rarr; Critical ports</div>
+          <div class="legend-row"><div class="legend-dot" style="background:#e07a3018;border-color:#e07a30"></div>Host &rarr; Vulnerabilities</div>
         </div>
       </div>
       <div class="graph-ctrl">
@@ -441,11 +470,67 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-body);font-si
   <!-- FOOTER -->
 </div>
 
+
+<!-- ========== SEVERITY REFERENCE MODAL ========== -->
+<div id="sev-ref-modal" onclick="if(event.target===this)closeSevRef()">
+  <div class="sev-ref-box">
+    <div class="modal-header">
+      <h2>⚖️ Severity Classification Reference</h2>
+      <button class="btn-icon" onclick="closeSevRef()">✕</button>
+    </div>
+    <div style="overflow-y:auto">
+      <div class="sev-ref-row">
+        <div class="sev-ref-bar" style="background:var(--sc)"></div>
+        <div class="sev-ref-content">
+          <div class="sev-ref-label" style="color:var(--sc)">CRITICAL</div>
+          <div class="sev-ref-desc">Confirmed CVEs with unauthenticated RCE / authentication bypass, or cleartext legacy protocols that must never be exposed under any circumstances.</div>
+          <div class="sev-ref-examples">e.g. EternalBlue (CVE-2017-0144), Heartbleed (CVE-2014-0160), Telnet service, IPMI cipher-0 bypass, Cisco Smart Install, Ghostcat (CVE-2020-1938)</div>
+        </div>
+      </div>
+      <div class="sev-ref-row">
+        <div class="sev-ref-bar" style="background:var(--sh)"></div>
+        <div class="sev-ref-content">
+          <div class="sev-ref-label" style="color:var(--sh)">HIGH</div>
+          <div class="sev-ref-desc">Services or configurations that are dangerous when internet-exposed or reachable by untrusted users. May enable lateral movement without deep exploitation.</div>
+          <div class="sev-ref-examples">e.g. FTP anonymous access, exposed RDP, outdated OpenSSH, SMB signing disabled, POODLE (CVE-2014-3566), FTP cleartext</div>
+        </div>
+      </div>
+      <div class="sev-ref-row">
+        <div class="sev-ref-bar" style="background:var(--sm)"></div>
+        <div class="sev-ref-content">
+          <div class="sev-ref-label" style="color:var(--sm)">MEDIUM</div>
+          <div class="sev-ref-desc">Misconfigurations requiring a network position or deliberate attack chain to exploit. No direct unauthenticated exploitation path exists alone.</div>
+          <div class="sev-ref-examples">e.g. RDP without NLA, SMBv2 signing not required, weak RSA host keys (1024-bit), expired TLS certificate</div>
+        </div>
+      </div>
+      <div class="sev-ref-row">
+        <div class="sev-ref-bar" style="background:var(--sl)"></div>
+        <div class="sev-ref-content">
+          <div class="sev-ref-label" style="color:var(--sl)">LOW</div>
+          <div class="sev-ref-desc">Best-practice deviations with limited direct impact. Should be addressed during routine hardening cycles.</div>
+          <div class="sev-ref-examples">e.g. SSH password authentication enabled, open HTTP redirect</div>
+        </div>
+      </div>
+      <div class="sev-ref-row">
+        <div class="sev-ref-bar" style="background:var(--si)"></div>
+        <div class="sev-ref-content">
+          <div class="sev-ref-label" style="color:var(--si)">INFO</div>
+          <div class="sev-ref-desc">Informational observations with no direct exploitability. Useful context for scoping further testing.</div>
+          <div class="sev-ref-examples">e.g. Port-only service identification (no -sV used), version detection gaps</div>
+        </div>
+      </div>
+      <div style="padding:12px 16px;font-size:11px;color:var(--muted);border-top:1px solid var(--border)">
+        Severity ratings reflect inherent risk and may require adjustment based on network segmentation, compensating controls, and business context. Ratings can be overridden manually in the Findings panel.
+      </div>
+    </div>
+  </div>
+</div>
 <!-- ========== ACTIONS PANEL ========== -->
 <div id="actions-panel" style="position:fixed;top:0;right:-480px;width:480px;height:100vh;background:var(--surface);border-left:1px solid var(--border);z-index:200;transition:right .3s ease;display:flex;flex-direction:column;box-shadow:-8px 0 32px rgba(0,0,0,.5)">
   <div class="panel-header">
     <h3>📋 Investigation Actions</h3>
     <div style="margin-left:auto;display:flex;gap:6px">
+      <button class="btn-icon" onclick="exportActionsXlsx()" title="Export as XLSX">⬇ XLSX</button>
       <button class="btn-icon" onclick="exportActionsJson()" title="Export as JSON">⬇ JSON</button>
       <button class="btn-icon" onclick="exportActionsCsv()" title="Export as CSV">⬇ CSV</button>
       <button class="btn-icon" onclick="closeActionsPanel()">✕</button>
@@ -486,8 +571,14 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-body);font-si
       </div>
       <button class="btn-icon" onclick="closeDrill()" style="margin-left:8px">✕</button>
     </div>
+    <div style="padding:8px 16px 0;flex-shrink:0">
+      <input id="drill-search" type="text" placeholder="🔍  Search hosts, ports, services, severity…"
+        style="width:100%;background:var(--bg);border:1px solid var(--border2);color:var(--text);padding:7px 12px;border-radius:6px;font-size:13px;font-family:var(--font-body);outline:none"
+        oninput="drillSearch(this.value)">
+    </div>
     <div class="drill-body">
       <div class="drill-filter-bar" id="drill-filter-bar"></div>
+      <div class="drill-count" id="drill-count" style="margin-bottom:8px;font-size:12px;color:var(--muted)"></div>
       <table class="drill-table" id="drill-table">
         <thead id="drill-thead"></thead>
         <tbody id="drill-tbody"></tbody>
@@ -506,10 +597,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-body);font-si
     <div class="modal-body">
       <div class="help-section">
         <h3>Essential Commands</h3>
-        <div class="cmd-block"><code>nmap -sV -oX output.xml [target]</code><p>Version detection. The recommended starting point. enables vulnerability matching in NmapViz.</p></div>
-        <div class="cmd-block"><code>nmap -A -oX output.xml [target]</code><p>Aggressive: OS detection + version + default scripts + traceroute. More data, more noise.</p></div>
-        <div class="cmd-block"><code>nmap -sV --script vuln -oX output.xml [target]</code><p>Vulnerability scripts: EternalBlue, Heartbleed, SMB issues, FTP anon, RDP checks, etc.</p></div>
-        <div class="cmd-block"><code>nmap -sV --script default,vuln -oX output.xml [target]</code><p>Default + vuln scripts combined. Best coverage/time balance.</p></div>
+        <div class="cmd-block"><code>nmap -Pn -sV -oX output.xml [target]</code><p>Version detection. The recommended starting point. enables vulnerability matching in NmapViz.</p></div>
+        <div class="cmd-block"><code>nmap -Pn -A -oX output.xml [target]</code><p>Aggressive: OS detection + version + default scripts + traceroute. More data, more noise.</p></div>
+        <div class="cmd-block"><code>nmap -Pn -sV --script vuln -oX output.xml [target]</code><p>Vulnerability scripts: EternalBlue, Heartbleed, SMB issues, FTP anon, RDP checks, etc.</p></div>
+        <div class="cmd-block"><code>nmap -Pn -sV --script default,vuln -oX output.xml [target]</code><p>Default + vuln scripts combined. Best coverage/time balance.</p></div>
       </div>
       <div class="help-section">
         <h3>Performance. Large Networks</h3>
@@ -527,14 +618,14 @@ body{background:var(--bg);color:var(--text);font-family:var(--font-body);font-si
       </div>
       <div class="help-section">
         <h3>Large Network Strategy</h3>
-        <div class="cmd-block"><code>nmap -sV --top-ports 150 -T4 -n --open -oX fast.xml 10.0.0.0/16</code><p>Fast wide-coverage scan for /16 or larger. Top 150 ports, aggressive timing, no DNS.</p></div>
-        <div class="cmd-block"><code>nmap -sV --top-ports 500 -T4 -oX scan.xml 192.168.0.0/24</code><p>Thorough /24 scan. Good balance between coverage and time (5-15 min).</p></div>
-        <div class="cmd-block"><code>nmap -sV -p- -T4 -oX full.xml [single-target]</code><p>Full port scan (all 65535). Only feasible on individual hosts.</p></div>
+        <div class="cmd-block"><code>nmap -Pn -sV --top-ports 150 -T4 -n --open -oX fast.xml [target/16]</code><p>Fast wide-coverage scan for /16 or larger. Top 150 ports, aggressive timing, no DNS.</p></div>
+        <div class="cmd-block"><code>nmap -Pn -sV --top-ports 500 -T4 -oX scan.xml [target/24]</code><p>Thorough /24 scan. Good balance between coverage and time (5-15 min).</p></div>
+        <div class="cmd-block"><code>nmap -Pn -sV -p- -T4 -oX full.xml [single-target]</code><p>Full port scan (all 65535). Only feasible on individual hosts.</p></div>
       </div>
       <div class="help-section">
         <h3>Multi-File Scanning (NmapViz feature)</h3>
-        <div class="cmd-block"><code>nmap -sV -oX scan_192.xml [target]
-nmap -sV -oX scan_10.xml  10.0.0.0/24</code><p>Scan different subnets separately, then drop both XMLs into NmapViz at once. They are merged automatically.</p></div>
+        <div class="cmd-block"><code>nmap -Pn -sV -oX scan_192.xml 192.168.0.0/24<br>
+nmap -Pn -sV -oX scan_10.xml  10.0.0.0/24</code><p>Scan different subnets separately, then drop both XMLs into NmapViz at once. They are merged automatically.</p></div>
       </div>
       <div class="help-section">
         <h3>Useful NSE Scripts</h3>
@@ -594,7 +685,7 @@ nmap -sV -oX scan_10.xml  10.0.0.0/24</code><p>Scan different subnets separately
 // ── STATE ─────────────────────────────────────────────────────────────────
 let scanData=null,currentScanId=null,network=null,nodesDS=null,edgesDS=null;
 let selectedHost=null,physicsOn=true,clustered=false;
-let drillData=[],drillMode='',drillFilter='all';
+let drillData=[],drillMode='',drillFilter='all',drillSearchQuery='';
 
 // ── FILE UPLOAD ───────────────────────────────────────────────────────────
 const dropArea=document.getElementById('drop-area');
@@ -652,7 +743,7 @@ function updateStats(){
   document.getElementById('s-vulns').textContent=tv;
   const ov=document.getElementById('scan-info-overlay');
   ov.style.display='block';
-  document.getElementById('scan-info-text').textContent=`${scanData.hosts.length} host(s) . ${tp} open ports . ${tc} critical . ${tv} findings`;
+  document.getElementById('scan-info-text').textContent=`${scanData.hosts.length} 💻 Host(s) ⚓ ${tp} Open Ports 🚨 ${tc} Critical ⚠️ ${tv} Findings`;
   document.getElementById('scan-info-cmd').textContent=scanData.args?'> '+scanData.args.substring(0,100):'';
 }
 function renderBadges(){
@@ -703,13 +794,22 @@ function loadUploadHistory(){
 function renderHostList(){
   const list=document.getElementById('host-list');list.innerHTML='';
   if(!scanData.hosts.length){list.innerHTML='<p class="empty-state">No active hosts found in scan</p>';return}
-  scanData.hosts.forEach((h,i)=>{
+  const sevOrder={CRITICAL:0,HIGH:1,MEDIUM:2,LOW:3,INFO:4};
+  const indexed=scanData.hosts.map((h,i)=>({h,i}));
+  indexed.sort((a,b)=>{
+    const aW=a.h.vulns.length?Math.min(...a.h.vulns.map(v=>sevOrder[v.severity]??9)):10;
+    const bW=b.h.vulns.length?Math.min(...b.h.vulns.map(v=>sevOrder[v.severity]??9)):10;
+    if(aW!==bW)return aW-bW;
+    const aC=a.h.ports.filter(p=>p.classification==='critical').length;
+    const bC=b.h.ports.filter(p=>p.classification==='critical').length;
+    return bC-aC;
+  });
+  indexed.forEach(({h,i})=>{
     const div=document.createElement('div');div.className='host-item';div.id='hi-'+i;
     const c=h.ports.filter(p=>p.classification==='critical').length;
     const n=h.ports.filter(p=>p.classification==='interesting').length;
     const r=h.ports.filter(p=>p.classification==='normal').length;
     const rv=h.vulns.filter(v=>v.severity!=='INFO').length;
-    const iv=h.vulns.filter(v=>v.severity==='INFO').length;
     const todos_count=(h.todos||[]).length;
     div.innerHTML=`
       <div class="host-ip">${h.ip||'?'}</div>
@@ -772,18 +872,23 @@ function renderVulnDetail(h){
   }
   const order={CRITICAL:0,HIGH:1,MEDIUM:2,LOW:3,INFO:4};
   const sorted=[...h.vulns].sort((a,b)=>(order[a.severity]||9)-(order[b.severity]||9));
-  let html=`<div style="font-size:12px;color:var(--muted);margin-bottom:10px">${real.length} finding(s) + ${info.length} info on ${h.ip}</div>`;
+  let html=`<div style="font-size:12px;color:var(--muted);margin-bottom:10px">${real.length} finding(s) + ${info.length} info on ${h.ip} <span style="float:right;font-size:11px;color:var(--muted)" title="Click &#x270f; Edit on any finding to adjust its severity rating">&#x270f; click edit to override severity</span></div>`;
+  let idx=0;
   sorted.forEach(v=>{
-    html+=`<div class="vuln-card vuln-${v.severity}">
-      <div class="vuln-header"><span class="sev-badge sev-${v.severity}">${v.severity}</span><span class="vuln-title">${esc(v.title)}</span></div>
+    const vi=idx; // capture index for override
+    html+=`<div class="vuln-card vuln-${v.severity}" id="vc-${selectedHost}-${vi}">
+      <button class="sev-override-btn" onclick="overrideSeverity(${selectedHost},${vi})" title="Override severity">✏️ Edit</button>
+      <div class="vuln-header"><span class="sev-badge sev-${v.severity}" id="svb-${selectedHost}-${vi}">${v.severity}</span><span class="vuln-title">${esc(v.title)}</span></div>
       <div class="vuln-desc">${esc(v.description)}</div>
       <div class="vuln-meta">
         ${v.cve!=='N/A'?`<span class="vuln-cve">CVE: ${esc(v.cve)}</span>`:''}
         <span class="vuln-port">Port ${v.port}</span>
         <span style="color:var(--dim)">${esc(v.script)}</span>
+        ${v._overridden?'<span style="color:var(--yellow);font-size:10px">&#x270f; overridden</span>':''}
       </div>
       ${v.followup?`<div class="vuln-followup"><div class="fu-label">Recommended follow-up scan</div><code onclick="copyCmd(this)" title="Click to copy">${esc(v.followup)}</code></div>`:''}
     </div>`;
+    idx++;
   });
   panel.innerHTML=html;
 }
@@ -815,10 +920,47 @@ function copyCmd(el){
   navigator.clipboard.writeText(el.textContent).then(()=>showToast('Command copied to clipboard'));
 }
 
+function overrideSeverity(hostIdx, vulnIdx){
+  if(!scanData||!scanData.hosts[hostIdx])return;
+  const vuln = scanData.hosts[hostIdx].vulns[vulnIdx];
+  if(!vuln)return;
+  const current = vuln.severity;
+  const levels = ['CRITICAL','HIGH','MEDIUM','LOW','INFO'];
+  const sel = document.createElement('select');
+  sel.className = 'sev-select';
+  levels.forEach(l=>{
+    const o=document.createElement('option');
+    o.value=l; o.textContent=l;
+    if(l===current) o.selected=true;
+    sel.appendChild(o);
+  });
+  sel.onchange = () => {
+    const newSev = sel.value;
+    vuln._overridden = true;
+    vuln._originalSeverity = vuln._originalSeverity || current;
+    vuln.severity = newSev;
+    // Update stats
+    updateStats();
+    // Re-render vuln panel
+    renderVulnDetail(scanData.hosts[hostIdx]);
+    showToast('Severity changed to ' + newSev + ' (local only)');
+  };
+  // Show inline selector near the badge
+  const badge = document.getElementById(`svb-${hostIdx}-${vulnIdx}`);
+  if(badge){
+    badge.replaceWith(sel);
+    sel.focus();
+    sel.addEventListener('blur', ()=>{ if(sel.parentNode){ sel.replaceWith(badge); } }, {once:true});
+  }
+}
+
 // ── DRILL-DOWN MODAL ──────────────────────────────────────────────────────
 function openDrill(mode){
   if(!scanData)return;
   drillMode=mode;drillFilter='all';
+  const searchEl=document.getElementById('drill-search');
+  if(searchEl)searchEl.value='';
+  drillSearchQuery='';
   const modal=document.getElementById('drill-modal');
   modal.classList.add('open');
   buildDrill();
@@ -836,17 +978,7 @@ function buildDrill(){
   if(drillMode==='all'){
     thead.innerHTML='<tr><th>IP Address</th><th>Hostname</th><th>OS</th><th>Open Ports</th><th>Critical</th><th>Interesting</th><th>Findings</th></tr>';
     drillData=scanData.hosts;
-    drillData.forEach(h=>{
-      const c=h.ports.filter(p=>p.classification==='critical').length;
-      const n=h.ports.filter(p=>p.classification==='interesting').length;
-      const v=h.vulns.filter(x=>x.severity!=='INFO').length;
-      const tr=document.createElement('tr');
-      tr.innerHTML=`<td class="drill-ip">${esc(h.ip)}</td><td style="color:var(--muted)">${esc(h.hostname)}</td><td style="color:var(--muted);font-size:12px">${esc((h.os||'').substring(0,30))}</td><td>${h.ports.length}</td>
-        <td style="color:var(--sc);font-weight:700">${c||''}</td>
-        <td style="color:var(--sh);font-weight:700">${n||''}</td>
-        <td style="color:var(--sm);font-weight:700">${v||''}</td>`;
-      tbody.appendChild(tr);
-    });
+    renderDrillAll();
   } else if(drillMode==='ports'||drillMode==='critical'||drillMode==='interesting'){
     thead.innerHTML='<tr><th>Host IP</th><th>Port</th><th>Protocol</th><th>Service</th><th>Version</th><th>Classification</th><th>Note</th></tr>';
     const filters=['all','critical','interesting','normal'];
@@ -889,11 +1021,34 @@ function renderDrillPorts(){
     });
   });
   drillData.sort((a,b)=>{const o={critical:0,interesting:1,normal:2};return(o[a.cls]||2)-(o[b.cls]||2)||a.port-b.port});
-  drillData.forEach(row=>{
+  const q=drillSearchQuery.toLowerCase();
+  const filtered=q?drillData.filter(r=>[r.host,r.svc,r.ver,r.cls,String(r.port),r.reason].some(s=>(s||'').toLowerCase().includes(q))):drillData;
+  const countEl=document.getElementById('drill-count');
+  if(countEl)countEl.textContent=filtered.length+' port(s)';
+  filtered.forEach(row=>{
     const clsColor={critical:'var(--sc)',interesting:'var(--sh)',normal:'var(--green)'}[row.cls]||'var(--muted)';
     const tr=document.createElement('tr');
     tr.innerHTML=`<td class="drill-ip">${esc(row.host)}</td><td class="drill-port" style="color:var(--accent)">${row.port}</td><td style="color:var(--muted)">${row.proto}</td><td>${esc(row.svc)}</td><td style="color:var(--muted);font-family:var(--font-mono);font-size:12px">${esc(row.ver)}</td>
       <td><span class="drill-sev" style="color:${clsColor}">${row.cls.toUpperCase()}</span></td><td class="drill-reason">${esc(row.reason)}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function renderDrillAll(){
+  const tbody=document.getElementById('drill-tbody');tbody.innerHTML='';
+  const q=drillSearchQuery.toLowerCase();
+  const filtered=q?drillData.filter(h=>[h.ip,h.hostname,h.os].some(s=>(s||'').toLowerCase().includes(q))):drillData;
+  const countEl=document.getElementById('drill-count');
+  if(countEl)countEl.textContent=filtered.length+' host(s)';
+  filtered.forEach(h=>{
+    const c=h.ports.filter(p=>p.classification==='critical').length;
+    const n=h.ports.filter(p=>p.classification==='interesting').length;
+    const v=h.vulns.filter(x=>x.severity!=='INFO').length;
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td class="drill-ip">${esc(h.ip)}</td><td style="color:var(--muted)">${esc(h.hostname)}</td><td style="color:var(--muted);font-size:12px">${esc((h.os||'').substring(0,30))}</td><td>${h.ports.length}</td>
+      <td style="color:var(--sc);font-weight:700">${c||''}</td>
+      <td style="color:var(--sh);font-weight:700">${n||''}</td>
+      <td style="color:var(--sm);font-weight:700">${v||''}</td>`;
     tbody.appendChild(tr);
   });
 }
@@ -903,19 +1058,55 @@ function renderDrillVulns(){
   drillData=[];
   const order={CRITICAL:0,HIGH:1,MEDIUM:2,LOW:3,INFO:4};
   scanData.hosts.forEach(h=>{
-    h.vulns.forEach(v=>{
+    h.vulns.forEach((v,vi)=>{
       if(drillFilter==='all'||v.severity===drillFilter)
-        drillData.push({host:h.ip,...v});
+        drillData.push({host:h.ip,...v,_hostRef:h,_vulnIdx:vi});
     });
   });
   drillData.sort((a,b)=>(order[a.severity]||9)-(order[b.severity]||9));
-  drillData.forEach(row=>{
+  const q=drillSearchQuery.toLowerCase();
+  const filtered=q?drillData.filter(r=>[r.host,r.severity,r.title,r.cve,String(r.port),r.description].some(s=>(s||'').toLowerCase().includes(q))):drillData;
+  const countEl=document.getElementById('drill-count');
+  if(countEl)countEl.textContent=filtered.length+' finding(s)';
+  filtered.forEach(row=>{
     const sc={CRITICAL:'var(--sc)',HIGH:'var(--sh)',MEDIUM:'var(--sm)',LOW:'var(--sl)',INFO:'var(--si)'}[row.severity]||'var(--muted)';
     const tr=document.createElement('tr');
-    tr.innerHTML=`<td class="drill-ip">${esc(row.host)}</td><td><span class="drill-sev" style="color:${sc}">${row.severity}</span></td><td style="font-weight:600">${esc(row.title)}</td>
+    // Inline severity override: click the badge to edit
+    const sevHtml=`<span class="drill-sev" style="color:${sc};cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px" title="Click to override severity" onclick="overrideDrillSeverity(this,'${row.host}',${row._vulnIdx})">${row.severity}</span>`;
+    tr.innerHTML=`<td class="drill-ip">${esc(row.host)}</td><td>${sevHtml}${row._overridden?'<span style="color:var(--yellow);font-size:9px;margin-left:4px">✎</span>':''}</td><td style="font-weight:600">${esc(row.title)}</td>
       <td style="color:var(--purple);font-size:12px">${esc(row.cve||'N/A')}</td><td style="color:var(--accent)">${row.port}</td><td class="drill-reason">${esc(row.description)}</td>`;
     tbody.appendChild(tr);
   });
+}
+
+function overrideDrillSeverity(el, hostIp, vulnIdx){
+  const h=scanData.hosts.find(h=>h.ip===hostIp);
+  if(!h)return;
+  const vuln=h.vulns[vulnIdx];
+  if(!vuln)return;
+  const levels=['CRITICAL','HIGH','MEDIUM','LOW','INFO'];
+  const sel=document.createElement('select');
+  sel.className='sev-select';
+  levels.forEach(l=>{const o=document.createElement('option');o.value=l;o.textContent=l;if(l===vuln.severity)o.selected=true;sel.appendChild(o)});
+  sel.onchange=()=>{
+    const newSev=sel.value;
+    vuln._overridden=true;vuln._originalSeverity=vuln._originalSeverity||vuln.severity;
+    vuln.severity=newSev;
+    updateStats();
+    // refresh both drill table and sidebar if host is selected
+    if(selectedHost!==null&&scanData.hosts[selectedHost]?.ip===hostIp)renderVulnDetail(scanData.hosts[selectedHost]);
+    renderDrillVulns();
+    showToast('Severity → '+newSev);
+  };
+  el.replaceWith(sel);sel.focus();
+  sel.addEventListener('blur',()=>{if(sel.parentNode)renderDrillVulns()},{once:true});
+}
+
+function drillSearch(q){
+  drillSearchQuery=q;
+  if(drillMode==='vulns')renderDrillVulns();
+  else if(drillMode==='ports'||drillMode==='critical'||drillMode==='interesting')renderDrillPorts();
+  else if(drillMode==='all')renderDrillAll();
 }
 
 function exportDrill(fmt){
@@ -1152,6 +1343,8 @@ function updateExportSection(){const s=document.getElementById('export-section')
 // ── HELP ──────────────────────────────────────────────────────────────────
 function openHelp(){document.getElementById('help-modal').classList.add('open')}
 function closeHelp(){document.getElementById('help-modal').classList.remove('open')}
+function openSevRef(){document.getElementById('sev-ref-modal').classList.add('open')}
+function closeSevRef(){document.getElementById('sev-ref-modal').classList.remove('open')}
 
 // Export dropdown
 function toggleExportMenu(){
@@ -1175,24 +1368,41 @@ function openActionsPanel(){
 function closeActionsPanel(){ document.getElementById('actions-panel').style.right='-480px'; }
 
 function buildActionsPanel(){
-  const body=document.getElementById('actions-body');
-  const filterBar=document.getElementById('actions-filter-bar');
+  const body     = document.getElementById('actions-body');
+  const filterBar= document.getElementById('actions-filter-bar');
+
   // Gather all todos from all hosts
-  const allTodos=[];
+  const allTodos = [];
   scanData.hosts.forEach(h=>{(h.todos||[]).forEach(t=>allTodos.push({...t,host:h.ip}))});
-  
+
+  // Build TL;DR quick-win command
+  const allPorts  = [...new Set(scanData.hosts.flatMap(h=>h.ports.map(p=>p.portid)))].sort((a,b)=>a-b);
+  const allHosts  = [...new Set(scanData.hosts.map(h=>h.ip))];
+  const quickCmd  = allPorts.length && allHosts.length
+    ? `nmap -A -sS -Pn -T4 -p ${allPorts.join(',')} ${allHosts.join(' ')} -oX quick_win.xml`
+    : null;
+
+  const tldrHtml = quickCmd ? `
+    <div class="tldr-box" style="margin-bottom:12px">
+      <div class="tldr-label">&#x26a1; TL;DR Quick Win</div>
+      <div class="tldr-desc">Aggressive re-scan of all detected ports across all live hosts. Use to confirm findings and trigger NSE vulnerability scripts in one command.</div>
+      <div class="tldr-cmd" id="tldr-cmd-text" onclick="copyCmd(this)" title="Click to copy">${esc(quickCmd)}</div>
+      <div class="tldr-actions">
+        <button class="btn-icon" onclick="copyCmd(document.getElementById('tldr-cmd-text'))" style="font-size:11px;padding:4px 10px">Copy command</button>
+        <span style="font-size:11px;color:var(--muted);align-self:center">${allPorts.length} unique port(s) &middot; ${allHosts.length} host(s)</span>
+      </div>
+    </div>` : '';
+
   if(!allTodos.length){
     filterBar.innerHTML='';
-    body.innerHTML='<div style="text-align:center;padding:40px 20px;color:var(--green);font-size:14px">No investigation actions found.<br><small style="color:var(--muted);font-size:12px;display:block;margin-top:8px">All detected ports had service info or are not notable.</small></div>';
+    body.innerHTML=tldrHtml+'<div style="text-align:center;padding:30px 20px;color:var(--green);font-size:14px">No investigation actions found.<br><small style="color:var(--muted);font-size:12px;display:block;margin-top:8px">All detected ports had service info or are not notable.</small></div>';
     return;
   }
 
-  // Filter bar
-  const priorities=['all','high','medium'];
   let activePriority='all';
   function renderFilter(){
     filterBar.innerHTML='';
-    priorities.forEach(p=>{
+    ['all','high','medium'].forEach(p=>{
       const btn=document.createElement('button');
       btn.className='drill-filter'+(p===activePriority?' active':'');
       btn.textContent=p==='all'?'All ('+allTodos.length+')':p.charAt(0).toUpperCase()+p.slice(1)+' ('+allTodos.filter(t=>t.priority===p).length+')';
@@ -1201,10 +1411,10 @@ function buildActionsPanel(){
     });
   }
   function renderList(){
-    const filtered = activePriority==='all' ? allTodos : allTodos.filter(t=>t.priority===activePriority);
+    const filtered=activePriority==='all'?allTodos:allTodos.filter(t=>t.priority===activePriority);
     const sorted=[...filtered].sort((a,b)=>(a.priority==='high'?0:1)-(b.priority==='high'?0:1));
-    if(!sorted.length){body.innerHTML='<p class="empty-state">No actions match this filter.</p>';return}
-    body.innerHTML=sorted.map(t=>`
+    if(!sorted.length){body.innerHTML=tldrHtml+'<p class="empty-state">No actions match this filter.</p>';return}
+    body.innerHTML=tldrHtml+sorted.map(t=>`
       <div class="todo-card ${t.priority==='high'?'priority-high':''}" style="margin-bottom:8px">
         <div class="todo-header">
           <span class="todo-priority ${t.priority}">${t.priority.toUpperCase()}</span>
@@ -1220,6 +1430,21 @@ function buildActionsPanel(){
   renderList();
 }
 
+function exportActionsXlsx(){
+  if(!scanData)return;
+  const allTodos=[];
+  scanData.hosts.forEach(h=>(h.todos||[]).forEach(t=>allTodos.push({...t,host:h.ip})));
+  if(!allTodos.length){showToast('No actions to export');return}
+  if(typeof XLSX!=='undefined'){
+    const keys=['host','port','priority','title','reason','description'];
+    const wsData=[keys,...allTodos.map(t=>keys.map(k=>t[k]||''))];
+    const ws=XLSX.utils.aoa_to_sheet(wsData);
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,ws,'Investigation Actions');
+    XLSX.writeFile(wb,'nmapviz_actions.xlsx');
+    showToast('Exported actions.xlsx');
+  } else { showToast('XLSX library not loaded, try JSON'); }
+}
 function exportActionsJson(){
   if(!scanData)return;
   const allTodos=[];
@@ -1242,7 +1467,7 @@ function exportActionsCsv(){
 }
 
 document.addEventListener('keydown',e=>{
-  if(e.key==='Escape'){closeHelp();closeHistory();closeDrill();closeActionsPanel();document.getElementById('export-menu').classList.remove('open')}
+  if(e.key==='Escape'){closeHelp();closeHistory();closeDrill();closeActionsPanel();closeSevRef();const m=document.getElementById('export-menu');if(m)m.classList.remove('open')}
 });
 
 // ── TABS ──────────────────────────────────────────────────────────────────
@@ -1279,7 +1504,7 @@ loadUploadHistory();
         Blog
       </a>
     </div>
-    <span class="footer-right">NmapViz . Open source network scanner visualizer</span>
+    <span class="footer-right">NmapViz | Open Source Network Scanner Visualizer</span>
   </footer>
 </body>
 </html>

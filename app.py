@@ -244,6 +244,16 @@ def detect_vulnerabilities(host_data):
                 "followup": cmd,
             })
 
+        # ── SEVERITY FRAMEWORK ────────────────────────────────────────────
+        # CRITICAL : Confirmed CVEs with RCE/authentication bypass, or cleartext
+        #            legacy protocols that must never be exposed under any circumstance.
+        # HIGH     : Services/configs that are dangerous when internet-exposed or
+        #            reachable by untrusted users; may enable lateral movement.
+        # MEDIUM   : Misconfigurations or weak settings that require a deliberate
+        #            attack or insider position to exploit.
+        # LOW      : Best-practice deviations with limited direct impact.
+        # INFO     : Informational observations with no direct exploitability.
+
         # ── SMB ───────────────────────────────────────────────────────────
         if port_num in (445, 139) or 'smb' in svc_name:
             for script in scripts:
@@ -251,32 +261,40 @@ def detect_vulnerabilities(host_data):
                 sid    = script.get('id', '').lower()
                 if 'smb-security-mode' in sid:
                     if 'message_signing: disabled' in output or 'signing: disabled' in output:
+                        # HIGH: Enables relay attacks but requires network position
                         vulns.append({"severity": "HIGH", "port": port_num,
                             "title": "SMB Signing Disabled",
-                            "description": "SMB without digital signing. Enables NTLM Relay attacks (Pass-the-Hash, etc).",
+                            "description": "SMB without digital signing. Enables NTLM Relay / Pass-the-Hash attacks from the same network segment.",
                             "cve": "N/A", "script": sid})
                     if 'account_used: guest' in output or 'anonymous' in output:
+                        # CRITICAL: Unauthenticated access to file shares
                         vulns.append({"severity": "CRITICAL", "port": port_num,
-                            "title": "SMB Anonymous/Guest Access",
-                            "description": "SMB allows access without valid credentials.",
+                            "title": "SMB Anonymous / Guest Access Enabled",
+                            "description": "SMB allows unauthenticated access. Attackers can enumerate shares, read files and potentially write without credentials.",
                             "cve": "N/A", "script": sid})
                 if 'smb-vuln-ms17-010' in sid or 'eternalblue' in output:
+                    # CRITICAL: confirmed wormable RCE CVE
                     vulns.append({"severity": "CRITICAL", "port": port_num,
-                        "title": "EternalBlue (MS17-010)",
-                        "description": "Remote code execution as SYSTEM. Used by WannaCry and NotPetya. Patch immediately.",
+                        "title": "EternalBlue (MS17-010) - Wormable RCE",
+                        "description": "Host is vulnerable to EternalBlue. Unauthenticated RCE as SYSTEM. Exploited by WannaCry and NotPetya. Patch immediately.",
                         "cve": "CVE-2017-0144", "script": sid})
                 if 'smb-vuln-ms08-067' in sid:
+                    # CRITICAL: confirmed unauthenticated RCE CVE
                     vulns.append({"severity": "CRITICAL", "port": port_num,
-                        "title": "MS08-067 NetAPI RCE",
-                        "description": "Classic RCE on Windows XP/2003.", "cve": "CVE-2008-4250", "script": sid})
+                        "title": "MS08-067 NetAPI Unauthenticated RCE",
+                        "description": "Unauthenticated remote code execution on Windows XP/2003. Highly reliable exploit available.",
+                        "cve": "CVE-2008-4250", "script": sid})
                 if 'smb2-security-mode' in sid and 'signing enabled and required' not in output:
+                    # MEDIUM: requires network position, not directly exploitable alone
                     vulns.append({"severity": "MEDIUM", "port": port_num,
                         "title": "SMBv2 Signing Not Required",
-                        "description": "SMBv2 signing not enforced. Relay attacks possible.", "cve": "N/A", "script": sid})
+                        "description": "SMBv2 signing is not enforced. In combination with credential capture (Responder, etc.), relay attacks are possible.",
+                        "cve": "N/A", "script": sid})
             if 'smbv1' in full_ver:
+                # CRITICAL: obsolete protocol, direct CVE vector
                 vulns.append({"severity": "CRITICAL", "port": port_num,
-                    "title": "SMBv1 Enabled",
-                    "description": "Obsolete protocol. EternalBlue/WannaCry vector. Disable immediately.",
+                    "title": "SMBv1 Protocol Enabled",
+                    "description": "SMBv1 is active. This deprecated protocol is the attack surface for EternalBlue/WannaCry. Disable it in Windows features.",
                     "cve": "CVE-2017-0144", "script": "version-detection"})
 
         # ── SSH ───────────────────────────────────────────────────────────
@@ -285,41 +303,51 @@ def detect_vulnerabilities(host_data):
                 sid    = script.get('id', '').lower()
                 output = script.get('output', '').lower()
                 if 'ssh-auth-methods' in sid and 'password' in output:
-                    vulns.append({"severity": "MEDIUM", "port": port_num,
-                        "title": "SSH Allows Password Authentication",
-                        "description": "Recommended to disable password auth in favour of SSH keys.",
+                    # LOW: password auth is common, exploitable only with valid credentials
+                    vulns.append({"severity": "LOW", "port": port_num,
+                        "title": "SSH Password Authentication Enabled",
+                        "description": "SSH accepts password-based login. Consider enforcing key-only authentication to reduce brute-force exposure.",
                         "cve": "N/A", "script": sid})
                 if 'ssh-hostkey' in sid and 'rsa 1024' in output:
+                    # MEDIUM: weak key, practical attack requires significant resources
                     vulns.append({"severity": "MEDIUM", "port": port_num,
-                        "title": "SSH Weak RSA Key (1024-bit)",
-                        "description": "1024-bit RSA keys are considered weak. Use minimum 2048 bits.",
+                        "title": "SSH Host Key Too Short (RSA 1024-bit)",
+                        "description": "1024-bit RSA host keys no longer meet modern security standards. Regenerate with a minimum of 2048 bits (3072 recommended).",
                         "cve": "N/A", "script": sid})
             if version and any(v in version for v in ['openssh 4.', 'openssh 5.', 'openssh 6.']):
+                # HIGH: many public CVEs in legacy OpenSSH, some pre-auth
                 vulns.append({"severity": "HIGH", "port": port_num,
                     "title": f"Outdated OpenSSH Version ({version})",
-                    "description": "Old OpenSSH with multiple known CVEs. Update immediately.",
-                    "cve": "Multiple", "script": "version-detection"})
+                    "description": "This OpenSSH release has numerous public CVEs including pre-authentication vulnerabilities. Update to the latest stable release.",
+                    "cve": "Multiple CVEs", "script": "version-detection"})
 
         # ── SSL/TLS ───────────────────────────────────────────────────────
         for script in scripts:
             sid    = script.get('id', '').lower()
             output = script.get('output', '').lower()
             if 'ssl-heartbleed' in sid and 'vulnerable' in output:
+                # CRITICAL: confirmed CVE, private key disclosure
                 vulns.append({"severity": "CRITICAL", "port": port_num,
-                    "title": "Heartbleed (OpenSSL)", "cve": "CVE-2014-0160",
-                    "description": "Reads server memory including private keys and session data.", "script": sid})
+                    "title": "Heartbleed (OpenSSL Memory Disclosure)",
+                    "description": "Confirmed vulnerable to Heartbleed. An unauthenticated attacker can read server memory, potentially recovering private keys, session tokens and passwords.",
+                    "cve": "CVE-2014-0160", "script": sid})
             if 'ssl-poodle' in sid and 'vulnerable' in output:
+                # HIGH: requires MitM position, but SSLv3 should never be enabled
                 vulns.append({"severity": "HIGH", "port": port_num,
-                    "title": "POODLE Attack (SSLv3)", "cve": "CVE-2014-3566",
-                    "description": "Server accepts SSLv3. Vulnerable to POODLE downgrade attack.", "script": sid})
+                    "title": "POODLE - SSLv3 Accepted",
+                    "description": "Server accepts SSLv3, which is fundamentally broken. A network attacker can decrypt HTTPS sessions via the POODLE downgrade attack. Disable SSLv3.",
+                    "cve": "CVE-2014-3566", "script": sid})
             if 'ssl-drown' in sid and 'vulnerable' in output:
+                # CRITICAL: cross-protocol decryption, confirmed CVE
                 vulns.append({"severity": "CRITICAL", "port": port_num,
-                    "title": "DROWN Attack", "cve": "CVE-2016-0800",
-                    "description": "Server supports SSLv2. Allows decryption of TLS connections.", "script": sid})
+                    "title": "DROWN Attack - SSLv2 Accepted",
+                    "description": "Server supports SSLv2, enabling the DROWN attack which can decrypt TLS sessions. Any server sharing the same private key is at risk.",
+                    "cve": "CVE-2016-0800", "script": sid})
             if 'ssl-cert' in sid and 'expired' in output:
-                vulns.append({"severity": "MEDIUM", "port": port_num,
-                    "title": "Expired SSL Certificate",
-                    "description": "The SSL certificate has expired. Clients may receive security warnings.",
+                # LOW: no direct exploitability, but breaks trust chain
+                vulns.append({"severity": "LOW", "port": port_num,
+                    "title": "Expired TLS Certificate",
+                    "description": "The server's TLS certificate is expired. Clients receive browser warnings and encrypted channels may not be trusted. Renew the certificate.",
                     "cve": "N/A", "script": sid})
 
         # ── FTP ───────────────────────────────────────────────────────────
@@ -328,33 +356,70 @@ def detect_vulnerabilities(host_data):
                 sid    = script.get('id', '').lower()
                 output = script.get('output', '').lower()
                 if 'ftp-anon' in sid and ('allowed' in output or 'anonymous' in output):
+                    # HIGH: unauthenticated file system access
                     vulns.append({"severity": "HIGH", "port": port_num,
-                        "title": "FTP Anonymous Access",
-                        "description": "FTP allows access without credentials. Possible file read/write.",
+                        "title": "FTP Anonymous Access Allowed",
+                        "description": "FTP server permits anonymous login. Depending on write permissions, attackers can exfiltrate files or upload malicious content without credentials.",
                         "cve": "N/A", "script": sid})
+            # FTP itself is cleartext — only flag if confirmed running (probed method)
+            if method == 'probed' and 'ftp' in svc_name:
+                vulns.append({"severity": "HIGH", "port": port_num,
+                    "title": "FTP Service Exposed (Cleartext Protocol)",
+                    "description": "FTP transmits credentials and data in cleartext. All traffic is interceptable. Replace with SFTP or FTPS if remote file transfer is required.",
+                    "cve": "N/A", "script": "version-detection"})
 
         # ── Redis ─────────────────────────────────────────────────────────
         if 'redis' in svc_name or port_num == 6379:
             for script in scripts:
                 if 'redis-info' in script.get('id', '').lower():
+                    # CRITICAL: unauthenticated access, confirmed reachable
                     vulns.append({"severity": "CRITICAL", "port": port_num,
-                        "title": "Redis Without Authentication",
-                        "description": "Redis exposed without password. Data access and possible RCE.",
+                        "title": "Redis Accessible Without Authentication",
+                        "description": "Redis responded without credentials. Attackers can read/write all data and in many configurations achieve RCE (via SLAVEOF or config rewrite).",
                         "cve": "N/A", "script": script['id']})
 
-        # ── HTTP ──────────────────────────────────────────────────────────
+        # ── Databases exposed without authentication evidence ──────────────
+        DB_PORTS = {
+            3306: 'MySQL', 5432: 'PostgreSQL', 1433: 'MSSQL', 1521: 'Oracle',
+            27017: 'MongoDB', 5984: 'CouchDB', 9200: 'Elasticsearch',
+        }
+        if port_num in DB_PORTS and method == 'probed':
+            db_name = DB_PORTS[port_num]
+            for script in scripts:
+                sid = script.get('id','').lower()
+                out = script.get('output','').lower()
+                if 'empty-password' in sid and ('ok' in out or 'success' in out):
+                    vulns.append({"severity": "CRITICAL", "port": port_num,
+                        "title": f"{db_name}: Empty/No Password",
+                        "description": f"{db_name} accepts connections with an empty or default password. Immediate credential remediation required.",
+                        "cve": "N/A", "script": sid})
+                elif 'info' in sid or 'brute' in sid:
+                    vulns.append({"severity": "HIGH", "port": port_num,
+                        "title": f"{db_name} Accessible from Network",
+                        "description": f"{db_name} (port {port_num}) responds to external connections. Databases should not be internet-reachable. Restrict access to application servers only.",
+                        "cve": "N/A", "script": sid})
+
+        # ── HTTP/Web ──────────────────────────────────────────────────────
         if svc_name in ('http','https','http-alt','https-alt') or port_num in (80,443,8080,8443):
             for script in scripts:
                 sid    = script.get('id', '').lower()
                 output = script.get('output', '').lower()
                 if 'http-shellshock' in sid and 'vulnerable' in output:
+                    # CRITICAL: confirmed unauthenticated RCE via CGI
                     vulns.append({"severity": "CRITICAL", "port": port_num,
-                        "title": "Shellshock (Bash RCE)", "cve": "CVE-2014-6271",
-                        "description": "Web server vulnerable to Shellshock. RCE via CGI.", "script": sid})
+                        "title": "Shellshock - Remote Code Execution via CGI",
+                        "description": "Web server confirmed vulnerable to Shellshock. Unauthenticated RCE is possible via specially crafted HTTP headers against any CGI script.",
+                        "cve": "CVE-2014-6271", "script": sid})
                 if 'http-default-accounts' in sid and 'valid' in output:
+                    # CRITICAL: confirmed working default credentials
                     vulns.append({"severity": "CRITICAL", "port": port_num,
                         "title": "Default Credentials Accepted",
-                        "description": "Web service accepts default credentials. Change passwords immediately.",
+                        "description": "The web application accepts known default credentials. This gives an attacker authenticated access. Change all default passwords immediately.",
+                        "cve": "N/A", "script": sid})
+                if 'http-open-redirect' in sid and 'found' in output:
+                    vulns.append({"severity": "LOW", "port": port_num,
+                        "title": "Open Redirect Detected",
+                        "description": "The web application redirects to external URLs without validation, enabling phishing attacks.",
                         "cve": "N/A", "script": sid})
 
         # ── RDP ───────────────────────────────────────────────────────────
@@ -363,56 +428,98 @@ def detect_vulnerabilities(host_data):
                 sid    = script.get('id', '').lower()
                 output = script.get('output', '').lower()
                 if 'rdp-vuln-ms12-020' in sid and 'vulnerable' in output:
+                    # HIGH: confirmed CVE, DoS / potential memory corruption
                     vulns.append({"severity": "HIGH", "port": port_num,
-                        "title": "MS12-020 RDP DoS", "cve": "CVE-2012-0152",
-                        "description": "RDP vulnerable to denial of service.", "script": sid})
+                        "title": "MS12-020 RDP Denial-of-Service",
+                        "description": "RDP is vulnerable to MS12-020, allowing an unauthenticated attacker to crash the system via malformed packets.",
+                        "cve": "CVE-2012-0152", "script": sid})
                 if 'rdp-enum-encryption' in sid and 'rdp security layer' in output:
+                    # MEDIUM: weaker auth, not directly exploitable but increases risk
                     vulns.append({"severity": "MEDIUM", "port": port_num,
-                        "title": "RDP Without NLA",
-                        "description": "RDP not using NLA. More exposed to brute force.",
+                        "title": "RDP Without Network Level Authentication (NLA)",
+                        "description": "RDP uses legacy encryption instead of NLA. Authentication occurs after a full connection, enabling credential brute-force without prior authentication.",
                         "cve": "N/A", "script": sid})
+            # Exposed RDP is inherently high-risk on internet-facing hosts
+            if method == 'probed':
+                vulns.append({"severity": "HIGH", "port": port_num,
+                    "title": "RDP Exposed (Remote Desktop Protocol)",
+                    "description": "RDP (port 3389) is reachable. Internet-facing RDP is a top ransomware entry point. Restrict to VPN or trusted IPs only.",
+                    "cve": "N/A", "script": "port-classification"})
 
         # ── Telnet ────────────────────────────────────────────────────────
         if 'telnet' in svc_name or port_num == 23:
+            # CRITICAL: cleartext credentials, universally deprecated
             vulns.append({"severity": "CRITICAL", "port": port_num,
-                "title": "Telnet Active",
-                "description": "Transmits everything in plaintext including credentials. Replace with SSH.",
+                "title": "Telnet Service Active (Cleartext Remote Access)",
+                "description": "Telnet transmits all data including credentials in cleartext. Any network observer can capture login sessions. Replace with SSH immediately.",
                 "cve": "N/A", "script": "port-classification"})
 
-        # ── IPMI ──────────────────────────────────────────────────────────
+        # ── IPMI / BMC ────────────────────────────────────────────────────
         if port_num == 623:
+            # CRITICAL: confirmed CVE with authentication bypass
             vulns.append({"severity": "CRITICAL", "port": port_num,
-                "title": "IPMI / BMC Exposed",
-                "description": "IPMI allows authentication bypass via cipher 0 and hash retrieval (CVE-2013-4786). Full server control possible.",
+                "title": "IPMI / BMC Exposed (Auth Bypass CVE)",
+                "description": "IPMI is reachable. Cipher 0 allows authentication bypass (CVE-2013-4786), enabling attackers to retrieve password hashes and gain full out-of-band server control.",
                 "cve": "CVE-2013-4786", "script": "port-classification"})
 
         # ── Cisco Smart Install ────────────────────────────────────────────
         if port_num == 4786:
+            # CRITICAL: confirmed unauthenticated RCE on network devices
             vulns.append({"severity": "CRITICAL", "port": port_num,
-                "title": "Cisco Smart Install Exposed",
-                "description": "Smart Install requires no authentication. Allows reading/writing device configs and RCE.",
+                "title": "Cisco Smart Install - Unauthenticated RCE",
+                "description": "Smart Install protocol is exposed. No authentication is required. Attackers can overwrite device configurations, change IOS images, and execute arbitrary commands.",
                 "cve": "CVE-2018-0171", "script": "port-classification"})
 
         # ── AJP / Ghostcat ────────────────────────────────────────────────
         if port_num == 8009 or 'ajp' in svc_name:
+            # CRITICAL: confirmed CVE, file read / potential RCE
             vulns.append({"severity": "CRITICAL", "port": port_num,
-                "title": "AJP Connector Exposed (Ghostcat)",
-                "description": "Apache JServ Protocol exposed. Ghostcat allows reading arbitrary files from the webapp.",
+                "title": "AJP Connector Exposed (Ghostcat - CVE-2020-1938)",
+                "description": "The Apache JServ Protocol port is reachable. Ghostcat allows unauthenticated reading of any file within the web application and code execution if file upload is available.",
                 "cve": "CVE-2020-1938", "script": "port-classification"})
 
-        # ── Outdated versions ─────────────────────────────────────────────
-        for pattern, svc_friendly in [
-            (r'apache[/ ]([12]\.\d+)', 'Apache HTTP Server'),
-            (r'nginx[/ ](0\.\d+)', 'Nginx'),
-            (r'php[/ ]([45]\.\d+)', 'PHP'),
-            (r'iis[/ ]([456]\.\d+)', 'Microsoft IIS'),
-        ]:
-            m = re.search(pattern, full_ver)
+        # ── Docker / Kubernetes APIs ───────────────────────────────────────
+        if port_num == 2375:
+            vulns.append({"severity": "CRITICAL", "port": port_num,
+                "title": "Docker API Exposed Without TLS",
+                "description": "The Docker daemon API is reachable without TLS. An attacker gains full container orchestration control and can escape to the host OS trivially.",
+                "cve": "N/A", "script": "port-classification"})
+        if port_num == 2379:
+            vulns.append({"severity": "CRITICAL", "port": port_num,
+                "title": "etcd Exposed (Kubernetes Secrets Store)",
+                "description": "etcd is reachable. It stores all Kubernetes secrets, tokens and configuration in plaintext. An unauthenticated read gives full cluster credential access.",
+                "cve": "N/A", "script": "port-classification"})
+
+        # ── Outdated software versions ─────────────────────────────────────
+        ver_patterns = [
+            # (regex, friendly_name, severity, reason)
+            (r'apache[/ ](1\.\d+)', 'Apache 1.x', 'CRITICAL',
+             'Apache 1.x is end-of-life with multiple unpatched RCE and DoS CVEs.'),
+            (r'apache[/ ](2\.[0-3])', 'Apache 2.x (old)', 'HIGH',
+             'Old Apache 2.x branch with multiple publicly known CVEs. Update to 2.4.x latest.'),
+            (r'nginx[/ ](0\.\d+|1\.[0-9]\.)', 'Nginx (legacy)', 'HIGH',
+             'Legacy Nginx version with known vulnerabilities. Update to current stable.'),
+            (r'php[/ ](4\.\d+|5\.\d+)', 'PHP 4/5', 'CRITICAL',
+             'PHP 4 and 5 are end-of-life with hundreds of unpatched CVEs including RCE.'),
+            (r'php[/ ](7\.[01])', 'PHP 7.0/7.1', 'HIGH',
+             'PHP 7.0 and 7.1 are end-of-life. Multiple CVEs including type confusion bugs.'),
+            (r'iis[/ ]([456]\.\d+)', 'IIS legacy', 'CRITICAL',
+             'IIS 4-6 are end-of-life with critical publicly exploited CVEs.'),
+            (r'iis[/ ](7\.\d+)', 'IIS 7.x', 'HIGH',
+             'IIS 7.x receives no security updates. Migrate to IIS 10.'),
+            (r'openssh[/ ](4\.|5\.|6\.)', 'OpenSSH legacy', 'HIGH',
+             'Very old OpenSSH with multiple pre-auth vulnerabilities. Update immediately.'),
+            (r'openssl[/ ](0\.|1\.0\.[01])', 'OpenSSL legacy', 'CRITICAL',
+             'End-of-life OpenSSL with critical CVEs (Heartbleed range). Update to 3.x.'),
+        ]
+        for pattern, svc_friendly, sev, reason in ver_patterns:
+            m = re.search(pattern, full_ver, re.IGNORECASE)
             if m:
-                vulns.append({"severity": "MEDIUM", "port": port_num,
-                    "title": f"Outdated Version: {svc_friendly} {m.group(1)}",
-                    "description": f"Old {svc_friendly} with multiple known CVEs. Update.",
-                    "cve": "Multiple", "script": "version-detection"})
+                vulns.append({"severity": sev, "port": port_num,
+                    "title": f"End-of-Life / Vulnerable Version: {svc_friendly}",
+                    "description": reason,
+                    "cve": "Multiple CVEs", "script": "version-detection"})
+                break  # only one version finding per port
 
     return vulns
 
@@ -616,15 +723,29 @@ def generate_html_report(scan, meta):
                 + "<td style='color:#58a6ff'>" + str(v['port']) + "</td></tr>"
             )
         vls = "".join(vls_parts)
+        todos_html = ""
+        if host.get('todos'):
+            todo_rows = "".join(
+                "<tr><td style='color:" + ('#bc8cff' if t.get('priority')=='high' else '#e07a30') + ";font-weight:700'>"
+                + t.get('priority','').upper() + "</td>"
+                + "<td>" + str(t.get('port','')) + "</td>"
+                + "<td>" + t.get('title','') + "</td>"
+                + "<td style='color:#888;font-size:11px'>" + t.get('description','') + "</td>"
+                + "<td style='color:#00bfff;font-size:10px;font-family:monospace'>" + (t.get('followup','') or '') + "</td></tr>"
+                for t in host.get('todos',[])
+            )
+            todos_html = f"<h4>INVESTIGATION ACTIONS ({len(host.get('todos',[]))})</h4><table><tr><th>Priority</th><th>Port</th><th>Title</th><th>Description</th><th>Follow-up Scan</th></tr>{todo_rows}</table>"
         hosts_html += f"""<div class='hb'>
           <h3>// {host.get('ip','')} {('<span style="color:#888">'+host['hostname']+'</span>') if host.get('hostname') else ''}</h3>
           <p class='meta'>OS: {host.get('os','Unknown')} | MAC: {host.get('mac','N/A')} {host.get('vendor','')}</p>
           <h4>OPEN PORTS ({len(host.get('ports',[]))})</h4>
           <table><tr><th>Port</th><th>Service</th><th>Version</th><th>Note</th></tr>{pts}</table>
           {'<h4>POTENTIAL VULNERABILITIES ('+str(len(host.get("vulns",[])))+')</h4><table><tr><th>Sev</th><th>Finding</th><th>Detail</th><th>CVE</th><th>Port</th></tr>'+vls+'</table>' if host.get('vulns') else '<p style="color:#00ff41">[ NO VULNERABILITIES DETECTED ]</p>'}
+          {todos_html}
         </div>"""
     tc = sum(len([p for p in h.get('ports',[]) if p['classification']=='critical']) for h in scan.get('hosts',[]))
     tv = sum(len(h.get('vulns',[])) for h in scan.get('hosts',[]))
+    tt = sum(len(h.get('todos',[])) for h in scan.get('hosts',[]))
     return f"""<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
 <title>NmapViz Report {ts}</title>
 <style>
@@ -640,7 +761,7 @@ def generate_html_report(scan, meta):
   table{{width:100%;border-collapse:collapse;font-size:12px;margin:8px 0}}
   th{{background:#161b22;padding:7px 10px;text-align:left;color:#888;font-size:11px;text-transform:uppercase;letter-spacing:.5px}}
   td{{padding:6px 10px;border-bottom:1px solid #21262d;vertical-align:top}}
-  .stats{{display:flex;gap:24px;background:#0d1117;border:1px solid #30363d;padding:16px;margin:16px 0;border-radius:4px}}
+  .stats{{display:flex;gap:24px;background:#0d1117;border:1px solid #30363d;padding:16px;margin:16px 0;border-radius:4px;flex-wrap:wrap}}
   .stat{{text-align:center}}.val{{font-size:26px;font-weight:700;color:#00ff41}}.lbl{{font-size:11px;color:#888;text-transform:uppercase}}
   code{{color:#58a6ff;background:rgba(88,166,255,.1);padding:2px 6px;border-radius:3px}}
   footer{{margin-top:40px;color:#555;font-size:11px;border-top:1px solid #30363d;padding-top:16px}}
@@ -648,13 +769,14 @@ def generate_html_report(scan, meta):
 <h1>&gt;_ NMAPVIZ // SCAN REPORT</h1>
 <p><strong>Date:</strong> {ts} &nbsp;|&nbsp; <strong>Source:</strong> {files}</p>
 <p><strong>Command:</strong> <code>{scan.get('args','N/A')}</code></p>
-<p><strong>Version detection:</strong> {'YES (-sV)' if scan.get('has_version') else 'NO : basic scan'} &nbsp;|&nbsp;
+<p><strong>Version detection:</strong> {'YES (-sV)' if scan.get('has_version') else 'NO (basic scan)'} &nbsp;|&nbsp;
    <strong>NSE Scripts:</strong> {'YES' if scan.get('has_scripts') else 'NO'}</p>
 <div class='stats'>
   <div class='stat'><div class='val'>{len(scan.get('hosts',[]))}</div><div class='lbl'>Hosts</div></div>
   <div class='stat'><div class='val'>{sum(len(h.get('ports',[])) for h in scan.get('hosts',[]))}</div><div class='lbl'>Open Ports</div></div>
   <div class='stat'><div class='val' style='color:#ff3333'>{tc}</div><div class='lbl'>Critical Ports</div></div>
   <div class='stat'><div class='val' style='color:#bc8cff'>{tv}</div><div class='lbl'>Vulnerabilities</div></div>
+  <div class='stat'><div class='val' style='color:#e07a30'>{tt}</div><div class='lbl'>Actions</div></div>
 </div>
 <h2>// HOST DETAILS</h2>{hosts_html}
 <footer>Generated by NmapViz &middot; https://github.com/YOUR_USERNAME/nmap-visualizer</footer>
@@ -664,6 +786,23 @@ def generate_html_report(scan, meta):
 # ─────────────────────────────────────────────────────────────────────────────
 # REPORT: MARKDOWN
 # ─────────────────────────────────────────────────────────────────────────────
+
+SEV_REFERENCE_MD = """
+---
+
+## Severity Classification Reference
+
+| Level | Criteria | Examples |
+|-------|----------|---------|
+| **CRITICAL** | Confirmed CVEs with unauthenticated RCE / auth bypass, or cleartext legacy protocols that must never be exposed | EternalBlue, Heartbleed, Telnet, Cisco Smart Install, IPMI cipher-0 bypass |
+| **HIGH** | Services or configurations that are dangerous when internet-exposed or reachable by untrusted users; may enable lateral movement | FTP anonymous, outdated OpenSSH, exposed RDP, SMB signing disabled |
+| **MEDIUM** | Misconfigurations requiring deliberate exploitation or insider access; no direct unauthenticated path | RDP without NLA, SMBv2 signing not required, weak RSA keys |
+| **LOW** | Best-practice deviations with limited direct impact; harden as time permits | SSH password auth enabled, expired TLS certificate |
+| **INFO** | Observations with no direct exploitability; context for the auditor | Port-only service identification, version detection gaps |
+
+> Severity ratings in this report reflect the inherent risk of the detected condition. They may require adjustment based on network segmentation, compensating controls, and business context. Ratings can be overridden in the NmapViz interface.
+"""
+
 
 def generate_markdown_report(scan, meta):
     ts    = meta.get('timestamp_display', '')
@@ -715,7 +854,7 @@ def _pdf_safe(text):
     if not text:
         return ''
     replacements = {
-        ':': '--',   # em dash
+        '—': '--',  # em dash (U+2014)
         '–': '-',    # en dash
         '‘': "'",    # left single quote
         '’': "'",    # right single quote
@@ -760,24 +899,26 @@ def generate_xlsx_report(scan, meta):
     ts    = meta.get('timestamp_display', '')
     files = ', '.join(meta.get('filenames', []))
 
-    # ── Colour palette ──────────────────────────────────────────────────────
-    C_BG_HEADER = 'FF1C2330'
-    C_BG_ROW1   = 'FF0D1117'
-    C_BG_ROW2   = 'FF161B22'
-    C_ACCENT    = 'FF4D9DE0'
-    C_CRIT      = 'FF7C3AED'
-    C_HIGH      = 'FFF85149'
-    C_MED       = 'FFE07A30'
-    C_LOW       = 'FF3FB950'
-    C_INFO      = 'FF4D9DE0'
-    C_TEXT      = 'FFCDD9E5'
-    C_MUTED     = 'FF768A9A'
+    # ── Colour palette (light/professional) ────────────────────────────────
+    C_BG_HEADER = 'FF2C3E50'   # dark header row
+    C_BG_ROW1   = 'FFFFFFFF'   # white
+    C_BG_ROW2   = 'FFF5F7FA'   # very light grey alternate
+    C_TEXT_HDR  = 'FFFFFFFF'   # white text on dark header
+    C_TEXT      = 'FF1A1A2E'   # near-black body text
+    C_MUTED     = 'FF555B6E'   # grey secondary text
+    # Severity accent colours (used for text only, not background)
+    C_CRIT      = 'FF6B21A8'   # purple
+    C_HIGH      = 'FFDC2626'   # red
+    C_MED       = 'FFD97706'   # amber
+    C_LOW       = 'FF16A34A'   # green
+    C_INFO      = 'FF2563EB'   # blue
+    C_ACCENT    = 'FF1D4ED8'   # blue accent
 
     sev_colors = {'CRITICAL': C_CRIT, 'HIGH': C_HIGH, 'MEDIUM': C_MED,
                   'LOW': C_LOW, 'INFO': C_INFO}
 
     def hdr_font(bold=True):
-        return Font(name='Calibri', bold=bold, color=C_TEXT, size=11)
+        return Font(name='Calibri', bold=bold, color=C_TEXT_HDR, size=11)
     def cell_font(color=C_TEXT, bold=False, size=10):
         return Font(name='Calibri', color=color, bold=bold, size=size)
     def hdr_fill():
@@ -941,12 +1082,64 @@ def generate_xlsx_report(scan, meta):
             row_i += 1
 
     buf = __import__('io').BytesIO()
+
+    # ── Sheet 6: Severity Classification Reference ───────────────────────────
+    ws6 = wb.create_sheet('Severity Reference')
+    ws6.sheet_properties.tabColor = C_INFO[2:]
+    ws6.column_dimensions['A'].width = 14
+    ws6.column_dimensions['B'].width = 70
+    ws6.column_dimensions['C'].width = 65
+
+    ws6.append(['Level', 'Criteria', 'Examples'])
+    for i, cell in enumerate(ws6[1], 1):
+        cell.font = hdr_font()
+        cell.fill = hdr_fill()
+        cell.alignment = Alignment(horizontal='left', vertical='center')
+    ws6.row_dimensions[1].height = 20
+    set_col_width(ws6, 1, 14); set_col_width(ws6, 2, 70); set_col_width(ws6, 3, 65)
+
+    sev_ref_rows = [
+        ('CRITICAL', C_CRIT,
+         'Confirmed CVEs with unauthenticated RCE / auth bypass, or cleartext legacy protocols that must never be exposed.',
+         'EternalBlue (MS17-010), Heartbleed (CVE-2014-0160), Telnet, IPMI cipher-0 bypass, Cisco Smart Install, Ghostcat'),
+        ('HIGH', C_HIGH,
+         'Services or configurations dangerous when internet-exposed or reachable by untrusted users. May enable lateral movement.',
+         'FTP anonymous access, exposed RDP, outdated OpenSSH, SMB signing disabled, POODLE (CVE-2014-3566)'),
+        ('MEDIUM', C_MED,
+         'Misconfigurations requiring network position or deliberate attack chain. No direct unauthenticated exploitation path.',
+         'RDP without NLA, SMBv2 signing not required, weak RSA host keys (1024-bit), expired TLS certificate'),
+        ('LOW', C_LOW,
+         'Best-practice deviations with limited direct impact. Address during routine hardening cycles.',
+         'SSH password authentication enabled, open HTTP redirect'),
+        ('INFO', C_INFO,
+         'Informational observations with no direct exploitability. Useful context for scoping further tests.',
+         'Port-only service identification (no -sV used), version detection gaps from basic scans'),
+    ]
+    for ri, (level, col, criteria, examples) in enumerate(sev_ref_rows, 2):
+        ws6.append([level, criteria, examples])
+        f = row_fill(ri)
+        for j, cell in enumerate(ws6[ri], 1):
+            cell.fill = f
+            cell.alignment = Alignment(vertical='center', wrap_text=True)
+            if j == 1: cell.font = cell_font(col, bold=True, size=11)
+            elif j == 2: cell.font = cell_font(C_TEXT)
+            else: cell.font = cell_font(C_MUTED)
+        ws6.row_dimensions[ri].height = 50
+
+    ws6.append([''])
+    ws6.append(['Note', 'Severity ratings reflect inherent risk and may require adjustment based on network segmentation, compensating controls, and business context. Ratings can be overridden in the NmapViz interface before generating reports.'])
+    note_row = ws6.max_row
+    ws6.cell(note_row, 1).font = cell_font(C_MUTED, bold=True)
+    ws6.cell(note_row, 2).font = cell_font(C_MUTED)
+    ws6.cell(note_row, 2).alignment = Alignment(wrap_text=True)
+    ws6.row_dimensions[note_row].height = 36
+
     wb.save(buf)
     return buf.getvalue()
 
 
 def generate_pdf_report(scan, meta):
-    """Clean, professional light-background executive summary PDF."""
+    """Professional A4 executive summary PDF - clean layout, no overflow."""
     from fpdf import FPDF, XPos, YPos
 
     ts    = _pdf_safe(meta.get('timestamp_display', 'N/A'))
@@ -967,248 +1160,370 @@ def generate_pdf_report(scan, meta):
     risk_score = crit_vulns*10 + high_vulns*5 + med_vulns*2 + crit_ports*3
     risk_label = 'CRITICAL' if risk_score>=60 else 'HIGH' if risk_score>=20 else 'MEDIUM' if risk_score>0 else 'LOW'
 
-    # Colours (RGB) for light background PDF
-    COL_BLACK   = (30,  30,  40)
-    COL_GRAY    = (100, 110, 120)
-    COL_LGRAY   = (180, 190, 200)
-    COL_LINE    = (220, 228, 236)
-    COL_BG      = (248, 250, 252)
-    COL_ACCENT  = (44,  105, 190)
-    COL_CRIT    = (100, 40,  200)
-    COL_HIGH    = (220, 55,  55)
-    COL_MED     = (210, 105, 30)
-    COL_LOW     = (40,  160, 70)
-    COL_INFO    = (44,  105, 190)
-    RISK_COL    = {'LOW':COL_LOW,'MEDIUM':COL_MED,'HIGH':COL_HIGH,'CRITICAL':COL_CRIT}
-    SEV_COL     = {'CRITICAL':COL_CRIT,'HIGH':COL_HIGH,'MEDIUM':COL_MED,'LOW':COL_LOW,'INFO':COL_INFO}
+    # ── Colour palette (clean, printable) ────────────────────────────────────
+    W  = (255, 255, 255)      # white
+    BG = (248, 250, 252)      # near-white bg
+    BK = (25,  25,  40)       # near-black body text
+    GR = (100, 110, 120)      # medium grey
+    LG = (200, 210, 218)      # light grey line
+    AC = (44,  105, 190)      # blue accent
+    CRIT = (100, 40,  200)    # purple
+    HIGH = (200, 40,  40)     # red
+    MED  = (200, 120, 20)     # amber
+    LOW  = (30,  150, 60)     # green
+    INFO = (44,  105, 190)    # blue
+    RISK_COL = {'LOW':LOW, 'MEDIUM':MED, 'HIGH':HIGH, 'CRITICAL':CRIT}
+    SEV_COL  = {'CRITICAL':CRIT, 'HIGH':HIGH, 'MEDIUM':MED, 'LOW':LOW, 'INFO':INFO}
+
+    MARGIN_L = 18
+    MARGIN_R = 18
+    PAGE_W   = 210
+    USABLE_W = PAGE_W - MARGIN_L - MARGIN_R   # 174 mm
 
     pdf = FPDF(orientation='P', unit='mm', format='A4')
-    pdf.set_auto_page_break(auto=True, margin=20)
-    pdf.set_margins(18, 15, 18)
+    pdf.set_auto_page_break(auto=False)
 
     def new_page():
         pdf.add_page()
-        pdf.set_fill_color(255,255,255)
-        pdf.rect(0,0,210,297,'F')
+        pdf.set_margins(MARGIN_L, 15, MARGIN_R)
+        pdf.set_fill_color(*W)
+        pdf.rect(0, 0, 210, 297, 'F')
 
-    def section_title(title):
-        pdf.ln(4)
-        pdf.set_font('Helvetica','B',11)
-        pdf.set_text_color(*COL_ACCENT)
-        pdf.set_fill_color(*COL_BG)
-        pdf.cell(0,8,' '+title,fill=True,new_x=XPos.LEFT,new_y=YPos.NEXT)
-        pdf.set_draw_color(*COL_ACCENT)
-        pdf.line(18, pdf.get_y(), 192, pdf.get_y())
-        pdf.ln(3)
-        pdf.set_text_color(*COL_BLACK)
+    def hline(y=None, col=LG):
+        y = y or pdf.get_y()
+        pdf.set_draw_color(*col)
+        pdf.line(MARGIN_L, y, PAGE_W - MARGIN_R, y)
 
-    def footer():
-        pdf.set_y(-14)
-        pdf.set_font('Helvetica','',7)
-        pdf.set_text_color(*COL_LGRAY)
-        pdf.cell(0,5,f'NmapViz Report  |  {ts}  |  Confidential  |  Page {pdf.page_no()}',align='C')
+    def section_header(title, y=None):
+        if y is None:
+            pdf.ln(5)
+        else:
+            pdf.set_y(y)
+        pdf.set_font('Helvetica', 'B', 9)
+        pdf.set_text_color(*AC)
+        pdf.set_fill_color(*BG)
+        pdf.cell(USABLE_W, 7, '  ' + title.upper(), fill=True, new_x=XPos.LEFT, new_y=YPos.NEXT)
+        hline(col=AC)
+        pdf.ln(2)
+        pdf.set_text_color(*BK)
 
-    # ── PAGE 1: COVER ────────────────────────────────────────────────────────
+    def page_footer():
+        pdf.set_y(-13)
+        pdf.set_font('Helvetica', '', 7)
+        pdf.set_text_color(*GR)
+        pdf.cell(0, 5, f'NmapViz  |  {ts}  |  Page {pdf.page_no()}  |  Confidential', align='C')
+
+    def truncate(text, max_chars):
+        t = _pdf_safe(str(text or ''))
+        return t[:max_chars] + ('...' if len(t) > max_chars else '')
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # PAGE 1: COVER / EXECUTIVE OVERVIEW
+    # ─────────────────────────────────────────────────────────────────────────
     new_page()
 
-    # Top accent bar
-    pdf.set_fill_color(*COL_ACCENT)
-    pdf.rect(0,0,210,4,'F')
+    # Top accent bar 6mm
+    pdf.set_fill_color(*AC)
+    pdf.rect(0, 0, 210, 6, 'F')
 
-    # Logo area
-    pdf.set_xy(18, 14)
-    pdf.set_font('Helvetica','B',26)
-    pdf.set_text_color(*COL_ACCENT)
-    pdf.cell(0,12,'NmapViz',new_x=XPos.LEFT,new_y=YPos.NEXT)
-    pdf.set_xy(18,26)
-    pdf.set_font('Helvetica','',10)
-    pdf.set_text_color(*COL_GRAY)
-    pdf.cell(0,6,'Network Security Scan  |  Executive Summary',new_x=XPos.LEFT,new_y=YPos.NEXT)
-
-    # Risk badge (top right)
+    # ── Header: Title left, Risk badge right ─────────────────────────────────
+    pdf.set_xy(MARGIN_L, 12)
+    pdf.set_font('Helvetica', 'B', 22)
+    pdf.set_text_color(*AC)
+    pdf.cell(110, 10, 'NmapViz')
+    # Risk badge (right-aligned, 50mm wide)
     rc = RISK_COL[risk_label]
     pdf.set_fill_color(*rc)
-    pdf.set_text_color(255,255,255)
-    pdf.set_font('Helvetica','B',12)
-    pdf.set_xy(145,14)
-    pdf.cell(47,14,f' RISK: {risk_label} ',align='C',fill=True)
+    pdf.set_text_color(*W)
+    pdf.set_font('Helvetica', 'B', 11)
+    pdf.set_xy(PAGE_W - MARGIN_R - 50, 12)
+    pdf.cell(50, 10, f'RISK: {risk_label}', align='C', fill=True)
 
-    # Divider
-    pdf.set_draw_color(*COL_LINE)
-    pdf.line(18,40,192,40)
+    pdf.set_xy(MARGIN_L, 23)
+    pdf.set_font('Helvetica', '', 9)
+    pdf.set_text_color(*GR)
+    pdf.cell(0, 5, 'Network Security Scan  |  Executive Summary Report')
+    pdf.ln(2)
+    hline(col=LG)
+    pdf.ln(3)
 
-    # Metadata block
-    pdf.set_xy(18,44)
-    pdf.set_font('Helvetica','',9)
-    for label,value in [
-        ('Date:', ts),
-        ('Source files:', files),
-        ('Command:', _pdf_safe(scan.get('args','N/A'))[:100]),
-        ('Version detection:', 'Yes (-sV)' if scan.get('has_version') else 'No (basic scan)'),
-        ('NSE Scripts:', 'Yes' if scan.get('has_scripts') else 'No'),
-    ]:
-        pdf.set_text_color(*COL_GRAY)
-        pdf.cell(38,5.5,label)
-        pdf.set_text_color(*COL_BLACK)
-        pdf.cell(0,5.5,value,new_x=XPos.LEFT,new_y=YPos.NEXT)
+    # ── Metadata: label left, value wraps if needed ───────────────────────────
+    meta_items = [
+        ('Date',               _pdf_safe(ts)),
+        ('Files',              _pdf_safe(', '.join(meta.get('filenames', [])))),
+        ('Version Detection',  'Yes (-sV)' if scan.get('has_version') else 'No (basic scan)'),
+        ('NSE Scripts',        'Yes' if scan.get('has_scripts') else 'No'),
+        ('Command',            _pdf_safe(scan.get('args', 'N/A'))),
+    ]
+    LABEL_W  = 32          # fixed label column
+    VALUE_W  = USABLE_W - LABEL_W  # remaining width for value (wraps)
+    LINE_H   = 4.5
+
+    for label, value in meta_items:
+        y_before = pdf.get_y()
+        # Draw label (never wraps)
+        pdf.set_font('Helvetica', 'B', 8)
+        pdf.set_text_color(*GR)
+        pdf.set_xy(MARGIN_L, y_before)
+        pdf.cell(LABEL_W, LINE_H, label + ':')
+        # Draw value with multi_cell so it wraps within the margin
+        pdf.set_font('Helvetica', '', 8)
+        pdf.set_text_color(*BK)
+        pdf.set_xy(MARGIN_L + LABEL_W, y_before)
+        pdf.multi_cell(VALUE_W, LINE_H, value, new_x=XPos.LEFT, new_y=YPos.NEXT)
+        # If multi_cell advanced Y more than one line, label needs no adjustment
+        # (it already rendered at y_before)
+    pdf.ln(3)
+    hline(col=LG)
     pdf.ln(4)
 
-    # Stats grid (2x3)
-    pdf.line(18, pdf.get_y(), 192, pdf.get_y())
-    pdf.ln(3)
+    # ── Stats grid: 3 columns x 2 rows, fixed absolute positions ─────────────
+    section_header('SCAN OVERVIEW')
     stats = [
-        ('Active Hosts',        str(total_hosts),  COL_ACCENT),
-        ('Open Ports',          str(total_ports),  COL_ACCENT),
-        ('Critical Ports',      str(crit_ports),   COL_CRIT),
-        ('Interesting Ports',   str(inter_ports),  COL_MED),
-        ('Total Findings',      str(total_vulns),  COL_HIGH),
-        ('Investigation Actions',str(total_todos), COL_MED),
+        ('Active Hosts',          str(total_hosts),  AC),
+        ('Open Ports',            str(total_ports),  AC),
+        ('Critical Ports',        str(crit_ports),   CRIT),
+        ('Interesting Ports',     str(inter_ports),  MED),
+        ('Total Findings',        str(total_vulns),  HIGH),
+        ('Investigation Actions', str(total_todos),  MED),
     ]
-    col_w = 58
-    for i,(label,val,col) in enumerate(stats):
-        c = i%3; r = i//3
-        x = 18 + c*col_w; y = pdf.get_y() + r*22
-        pdf.set_fill_color(*COL_BG)
-        pdf.rect(x, y, col_w-3, 19,'F')
-        pdf.set_xy(x+4, y+2)
-        pdf.set_font('Helvetica','B',18)
+    CELL_W = USABLE_W / 3 - 2   # ~56 mm each
+    CELL_H = 18
+    base_y  = pdf.get_y()
+    for i, (label, val, col) in enumerate(stats):
+        col_idx = i % 3
+        row_idx = i // 3
+        x = MARGIN_L + col_idx * (CELL_W + 2)
+        y = base_y + row_idx * (CELL_H + 2)
+        pdf.set_fill_color(*BG)
+        pdf.rect(x, y, CELL_W, CELL_H, 'F')
         pdf.set_text_color(*col)
-        pdf.cell(col_w-10,9,val)
-        pdf.set_xy(x+4, y+11)
-        pdf.set_font('Helvetica','',8)
-        pdf.set_text_color(*COL_GRAY)
-        pdf.cell(col_w-10,5,label.upper())
-    pdf.ln(48)
+        pdf.set_font('Helvetica', 'B', 20)
+        pdf.set_xy(x + 3, y + 2)
+        pdf.cell(CELL_W - 6, 10, val)
+        pdf.set_text_color(*GR)
+        pdf.set_font('Helvetica', '', 7)
+        pdf.set_xy(x + 3, y + 12)
+        pdf.cell(CELL_W - 6, 5, label.upper())
+    # Advance past the 2-row grid
+    pdf.set_y(base_y + 2 * (CELL_H + 2) + 4)
 
-    # Severity breakdown bar chart
-    section_title('FINDING SEVERITY BREAKDOWN')
-    sev_data = [('CRITICAL',crit_vulns,COL_CRIT),('HIGH',high_vulns,COL_HIGH),
-                ('MEDIUM',med_vulns,COL_MED),('LOW',low_vulns,COL_LOW)]
-    bar_max = max(1, total_vulns)
-    bar_area = 120
-    for label,count,col in sev_data:
-        pdf.set_font('Helvetica','B',9)
+    # ── Severity bar chart ────────────────────────────────────────────────────
+    hline(col=LG); pdf.ln(4)
+    section_header('FINDINGS BY SEVERITY')
+    sev_rows = [
+        ('CRITICAL', crit_vulns, CRIT),
+        ('HIGH',     high_vulns, HIGH),
+        ('MEDIUM',   med_vulns,  MED),
+        ('LOW',      low_vulns,  LOW),
+    ]
+    bar_max  = max(1, total_vulns)
+    BAR_AREA = USABLE_W - 50   # reserve 50mm for label+count
+    for sev, count, col in sev_rows:
+        pdf.set_font('Helvetica', 'B', 8)
         pdf.set_text_color(*col)
-        pdf.cell(24,6,label)
-        pdf.set_text_color(*COL_BLACK)
-        pdf.set_font('Helvetica','',9)
-        pdf.cell(10,6,str(count),align='R')
-        bar_len = int((count/bar_max)*bar_area)
+        pdf.cell(22, 5.5, sev)
+        pdf.set_font('Helvetica', '', 8)
+        pdf.set_text_color(*BK)
+        pdf.cell(10, 5.5, str(count), align='R')
+        pdf.cell(4, 5.5, '')   # spacer
+        bar_len = int((count / bar_max) * BAR_AREA) if count else 0
         if bar_len > 0:
             pdf.set_fill_color(*col)
-            pdf.rect(pdf.get_x()+3, pdf.get_y()+1.5, bar_len, 3.5,'F')
-        pdf.ln(7)
+            pdf.rect(pdf.get_x(), pdf.get_y() + 1, bar_len, 3.5, 'F')
+        pdf.ln(6)
 
-    footer()
+    page_footer()
 
-    # ── PAGE 2: TOP CRITICAL AND HIGH FINDINGS ───────────────────────────────
+    # ─────────────────────────────────────────────────────────────────────────
+    # PAGE 2: TOP FINDINGS (CRITICAL + HIGH)
+    # ─────────────────────────────────────────────────────────────────────────
     new_page()
-    pdf.set_fill_color(*COL_ACCENT)
-    pdf.rect(0,0,210,4,'F')
-    section_title('TOP CRITICAL AND HIGH SEVERITY FINDINGS')
+    section_header('CRITICAL, HIGH AND MEDIUM SEVERITY FINDINGS')
 
-    all_vulns = []
+    all_vulns_chm = []
     for h in hosts:
-        for v in h.get('vulns',[]):
-            if v['severity'] in ('CRITICAL','HIGH'):
-                all_vulns.append({**v,'host_ip':h['ip']})
+        for v in h.get('vulns', []):
+            if v['severity'] in ('CRITICAL', 'HIGH', 'MEDIUM'):
+                all_vulns_chm.append({**v, 'host_ip': h['ip']})
     sev_order = {'CRITICAL':0,'HIGH':1,'MEDIUM':2,'LOW':3,'INFO':4}
-    all_vulns.sort(key=lambda x: sev_order.get(x['severity'],9))
+    all_vulns_chm.sort(key=lambda x: sev_order.get(x['severity'], 9))
 
-    if not all_vulns:
-        pdf.set_font('Helvetica','',10)
-        pdf.set_text_color(*COL_LOW)
-        pdf.cell(0,8,'No Critical or High severity findings detected.')
+    if not all_vulns_chm:
+        pdf.set_font('Helvetica', '', 10)
+        pdf.set_text_color(*LOW)
+        pdf.cell(0, 8, 'No Critical, High or Medium severity findings detected in this scan.')
     else:
-        for v in all_vulns[:22]:
-            if pdf.get_y() > 265:
+        for v in all_vulns_chm[:30]:
+            if pdf.get_y() > 262:
+                page_footer()
                 new_page()
-                pdf.set_fill_color(*COL_ACCENT)
-                pdf.rect(0,0,210,4,'F')
-                section_title('TOP FINDINGS (continued)')
-            y0 = pdf.get_y()
-            sc = SEV_COL.get(v['severity'],COL_GRAY)
+                section_header('FINDINGS (continued)')
+            sc   = SEV_COL.get(v['severity'], GR)
+            y0   = pdf.get_y()
+            ITEM_H = 14   # fixed item height
+            # Left colour strip
             pdf.set_fill_color(*sc)
-            pdf.rect(18,y0,3,15,'F')
-            pdf.set_xy(23,y0)
-            pdf.set_font('Helvetica','B',9)
+            pdf.rect(MARGIN_L, y0, 2.5, ITEM_H, 'F')
+            # Severity label
+            pdf.set_xy(MARGIN_L + 4, y0 + 0.5)
+            pdf.set_font('Helvetica', 'B', 8)
             pdf.set_text_color(*sc)
-            pdf.cell(22,5,v['severity'])
-            pdf.set_text_color(*COL_BLACK)
-            pdf.cell(0,5,_pdf_safe(v['title'])[:80])
-            pdf.set_xy(23,y0+6)
-            pdf.set_font('Helvetica','',8)
-            pdf.set_text_color(*COL_GRAY)
-            pdf.cell(0,5,_pdf_safe(f"Host: {v['host_ip']}   Port: {v['port']}   CVE: {v.get('cve','N/A')}"))
-            pdf.set_xy(23,y0+11)
-            pdf.set_text_color(*COL_GRAY)
-            pdf.set_font('Helvetica','',7)
-            desc = _pdf_safe(v['description'])[:130]
-            pdf.cell(0,4,desc)
-            pdf.ln(18)
-            pdf.set_draw_color(*COL_LINE)
-            pdf.line(23,pdf.get_y()-2,192,pdf.get_y()-2)
+            pdf.cell(20, 4.5, v['severity'])
+            # Host + port right-aligned
+            meta_str = f"{v['host_ip']}  port {v['port']}"
+            if v.get('cve') and v['cve'] != 'N/A':
+                meta_str += f"  {v['cve']}"
+            pdf.set_font('Helvetica', '', 7)
+            pdf.set_text_color(*GR)
+            pdf.cell(0, 4.5, meta_str, align='R')
+            # Title on next line
+            pdf.set_xy(MARGIN_L + 4, y0 + 5.5)
+            pdf.set_font('Helvetica', 'B', 8)
+            pdf.set_text_color(*BK)
+            pdf.cell(0, 4.5, truncate(v['title'], 90))
+            # Description truncated to one line
+            pdf.set_xy(MARGIN_L + 4, y0 + 10)
+            pdf.set_font('Helvetica', '', 7)
+            pdf.set_text_color(*GR)
+            pdf.cell(0, 4, truncate(v['description'], 120))
+            pdf.set_y(y0 + ITEM_H + 1)
+            hline(col=(235, 238, 242))
 
-    footer()
+    page_footer()
 
-    # ── PAGE 3+: HOST SUMMARY ────────────────────────────────────────────────
+    # ─────────────────────────────────────────────────────────────────────────
+    # PAGE 3+: HOST SUMMARY TABLE
+    # ─────────────────────────────────────────────────────────────────────────
     new_page()
-    pdf.set_fill_color(*COL_ACCENT)
-    pdf.rect(0,0,210,4,'F')
-    section_title('HOST SUMMARY TABLE')
+    section_header('HOST SUMMARY')
 
-    col_w2   = [34,48,16,18,20,18,20]
-    headers2 = ['IP Address','OS','Ports','Critical','Interesting','Findings','Actions']
-    # Header row
-    pdf.set_fill_color(*COL_BG)
-    for j,(h,w) in enumerate(zip(headers2,col_w2)):
-        pdf.set_xy(18+sum(col_w2[:j]), pdf.get_y())
-        pdf.set_font('Helvetica','B',8)
-        pdf.set_text_color(*COL_GRAY)
-        pdf.cell(w,6,h,fill=True)
-    pdf.ln(7)
+    # Table column widths (must sum to USABLE_W = 174)
+    COL_WIDTHS  = [32, 46, 14, 16, 18, 14, 16, 18]
+    COL_HEADERS = ['IP Address', 'OS / Platform', 'Ports', 'Critical', 'Interesting', 'Vulns', 'Actions', 'Top Sev']
 
-    for idx,host in enumerate(sorted(hosts, key=lambda h: [int(x) for x in (h.get('ip','0')+'.0.0.0').split('.')[:4]])):
-        if pdf.get_y() > 265:
+    def draw_table_header(ws):
+        pdf.set_fill_color(44, 62, 80)
+        for j, (h, w) in enumerate(zip(COL_HEADERS, COL_WIDTHS)):
+            pdf.set_xy(MARGIN_L + sum(COL_WIDTHS[:j]), pdf.get_y())
+            pdf.set_font('Helvetica', 'B', 7)
+            pdf.set_text_color(*W)
+            pdf.cell(w, 5.5, h, fill=True)
+        pdf.ln(6)
+
+    draw_table_header(None)
+    sorted_hosts = sorted(hosts, key=lambda h: [int(x) for x in (h.get('ip','0')+'.0.0.0').split('.')[:4]])
+
+    for row_i, host in enumerate(sorted_hosts):
+        if pdf.get_y() > 262:
+            page_footer()
             new_page()
-            pdf.set_fill_color(*COL_ACCENT)
-            pdf.rect(0,0,210,4,'F')
-            section_title('HOST SUMMARY TABLE (continued)')
-            pdf.set_fill_color(*COL_BG)
-            for j,(h,w) in enumerate(zip(headers2,col_w2)):
-                pdf.set_xy(18+sum(col_w2[:j]), pdf.get_y())
-                pdf.set_font('Helvetica','B',8)
-                pdf.set_text_color(*COL_GRAY)
-                pdf.cell(w,6,h,fill=True)
-            pdf.ln(7)
+            section_header('HOST SUMMARY (continued)')
+            draw_table_header(None)
 
         hc = len([p for p in host.get('ports',[]) if p['classification']=='critical'])
         hi = len([p for p in host.get('ports',[]) if p['classification']=='interesting'])
         hv = len(host.get('vulns',[]))
         ht = len(host.get('todos',[]))
+        # Top severity of this host
+        host_sevs = [v.get('severity','INFO') for v in host.get('vulns',[])]
+        top_sev   = min(host_sevs, key=lambda s: sev_order.get(s,9)) if host_sevs else 'clean'
+        top_col   = SEV_COL.get(top_sev, LOW) if top_sev != 'clean' else LOW
 
-        if idx%2==0:
-            pdf.set_fill_color(*COL_BG)
-        else:
-            pdf.set_fill_color(255,255,255)
+        fill_bg = BG if row_i % 2 == 0 else W
+        pdf.set_fill_color(*fill_bg)
 
-        row_vals  = [_pdf_safe(host.get('ip','?')), _pdf_safe((host.get('os','Unknown') or 'Unknown'))[:28],
-                     str(len(host.get('ports',[]))), str(hc) if hc else '', str(hi) if hi else '',
-                     str(hv) if hv else '', str(ht) if ht else '']
-        row_cols  = [COL_ACCENT, COL_GRAY, COL_BLACK,
-                     COL_CRIT if hc else COL_LGRAY, COL_HIGH if hi else COL_LGRAY,
-                     COL_MED if hv else COL_LGRAY, COL_MED if ht else COL_LGRAY]
-        row_bold  = [True,False,False,bool(hc),bool(hi),bool(hv),bool(ht)]
+        values = [
+            _pdf_safe(host.get('ip','?')),
+            truncate(host.get('os','Unknown') or 'Unknown', 30),
+            str(len(host.get('ports',[]))),
+            str(hc) if hc else '-',
+            str(hi) if hi else '-',
+            str(hv) if hv else '-',
+            str(ht) if ht else '-',
+            top_sev,
+        ]
+        text_colors = [
+            AC, GR, BK,
+            CRIT if hc else GR,
+            MED  if hi else GR,
+            HIGH if hv else GR,
+            MED  if ht else GR,
+            top_col,
+        ]
+        bolds = [True, False, False, bool(hc), bool(hi), bool(hv), bool(ht), bool(host_sevs)]
 
-        for j,(val,w) in enumerate(zip(row_vals,col_w2)):
-            pdf.set_xy(18+sum(col_w2[:j]), pdf.get_y())
-            pdf.set_font('Helvetica','B' if row_bold[j] else '',8)
-            pdf.set_text_color(*row_cols[j])
-            pdf.cell(w,5.5,val,fill=True)
-        pdf.ln(6)
+        for j, (val, w) in enumerate(zip(values, COL_WIDTHS)):
+            pdf.set_xy(MARGIN_L + sum(COL_WIDTHS[:j]), pdf.get_y())
+            pdf.set_font('Helvetica', 'B' if bolds[j] else '', 7)
+            pdf.set_text_color(*text_colors[j])
+            pdf.cell(w, 5, val, fill=True)
+        pdf.ln(5.5)
 
-    footer()
+    # ─────────────────────────────────────────────────────────────────────────
+    # LAST PAGE: SEVERITY CLASSIFICATION REFERENCE
+    # ─────────────────────────────────────────────────────────────────────────
+    page_footer()
+    new_page()
+    section_header('SEVERITY CLASSIFICATION REFERENCE')
+    pdf.ln(2)
 
+    sev_ref = [
+        ('CRITICAL', CRIT,
+         'Confirmed CVEs with unauthenticated RCE / authentication bypass, or cleartext '
+         'legacy protocols that must never be exposed under any circumstances.',
+         'EternalBlue (MS17-010), Heartbleed, Telnet, IPMI cipher-0 bypass, Cisco Smart Install, Ghostcat'),
+        ('HIGH', HIGH,
+         'Services or configurations dangerous when internet-exposed or reachable by '
+         'untrusted users. May enable lateral movement without deep exploitation.',
+         'FTP anonymous access, exposed RDP, outdated OpenSSH, SMB signing disabled, POODLE'),
+        ('MEDIUM', MED,
+         'Misconfigurations requiring network position or deliberate attack chain. '
+         'No direct unauthenticated exploitation path.',
+         'RDP without NLA, SMBv2 signing not required, weak RSA host keys, expired TLS cert'),
+        ('LOW', LOW,
+         'Best-practice deviations with limited direct impact. Should be addressed '
+         'during routine hardening cycles.',
+         'SSH password authentication enabled, open HTTP redirect'),
+        ('INFO', INFO,
+         'Informational observations with no direct exploitability. Useful context '
+         'for the auditor and for scoping further tests.',
+         'Port-only service identification, version detection gaps from basic scans'),
+    ]
+
+    for sev, col, description, examples in sev_ref:
+        y0 = pdf.get_y()
+        # Coloured left bar
+        pdf.set_fill_color(*col)
+        pdf.rect(MARGIN_L, y0, 2.5, 20, 'F')
+        # Severity label
+        pdf.set_xy(MARGIN_L + 4, y0 + 1)
+        pdf.set_font('Helvetica', 'B', 9)
+        pdf.set_text_color(*col)
+        pdf.cell(0, 5, sev)
+        # Description
+        pdf.set_xy(MARGIN_L + 4, y0 + 7)
+        pdf.set_font('Helvetica', '', 8)
+        pdf.set_text_color(*BK)
+        pdf.multi_cell(USABLE_W - 4, 4.2, _pdf_safe(description))
+        # Examples
+        pdf.set_x(MARGIN_L + 4)
+        pdf.set_font('Helvetica', 'I', 7)
+        pdf.set_text_color(*GR)
+        pdf.cell(0, 4, 'e.g.: ' + examples)
+        pdf.ln(4)
+        hline(col=(235, 238, 242))
+        pdf.ln(2)
+
+    pdf.ln(4)
+    pdf.set_font('Helvetica', 'I', 8)
+    pdf.set_text_color(*GR)
+    pdf.multi_cell(0, 4.5, _pdf_safe(
+        'Note: Severity ratings reflect the inherent risk of the detected condition and may require '
+        'adjustment based on network segmentation, compensating controls, and business context. '
+        'Ratings can be overridden manually in the NmapViz interface before generating reports.'))
+
+    page_footer()
     return bytes(pdf.output())
 
 
